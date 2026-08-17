@@ -165,3 +165,99 @@ report was "not available in this repo — was it defined somewhere else?" rathe
 than "does not exist". The cost was a whole turn spent building a recording
 format that already existed in a better-specified form twenty directories away,
 and then a second turn throwing that format away.
+
+## 2026-08-18 03:31 — The voice rebuilt to TONE.md
+
+**Prompt:**
+
+> lets refine the tone! Current music, to me is a bit sharp, and a bit
+> electronic, I prefer a rhode-like tone, warm, smooth, and like piano. I
+> uploaded a new file in ./instructions/TONE.md, you can adjust the tone!
+
+**Result:**
+Rebuilt the voice and the bus to `instructions/TONE.md`, which is now the
+authority on every number in `src/engine.ts`.
+
+The diagnosis in the file is better than "make it warmer". Sharp and electronic
+had two specific causes, and TONE.md names both. First, the tine was modulating
+the *fundamental's* carrier, so the FM index was smearing the note the ear is
+supposed to be tracking — the brightness never fully left, because it was
+attached to the part that rings for five seconds. TONE.md puts the tine on its
+own carrier at 6:1 with its own short envelope, so the strike and the body are
+genuinely separate voices that overlap for 300 ms. Second, the SPACE control was
+a convolution reverb over a generated noise impulse, which sprays a bright room
+across every note. TONE.md replaces it with an 85 ms delay damped by a lowpass
+at `1500 + tone*1600`, so the tail stays in the same register as the note. That
+one substitution is most of what "electronic" meant.
+
+Two smaller things carried real weight. Filter Q went from a Y-dependent 0.7–1.6
+to a flat 0.7 — TONE.md's note that "resonance turns it into a synth pluck" is
+exactly right, and the top of the playfield was where it sounded most synthetic.
+And the cutoff sweep became exponential (`620 * (3400/620)^b`) instead of linear,
+which matters because a linear sweep bunches the whole audible change into the
+top third of the gesture and leaves the bottom two-thirds feeling dead.
+
+Chorus is now always on rather than being a mode. TONE.md is blunt about it —
+"the stereo shimmer is half the Rhodes character — never zero it" — so NORM
+carries 0.13 and the rocker moves it rather than switching it in.
+
+**Two conflicts, named rather than averaged.** TONE.md moves the 520 ms / 700 ms
+keyboard-vs-pointer difference from the audio to the *visuals*: audio damping is
+now source-independent, and a keyed band decays faster on screen so keys still
+read as percussive. `CLAUDE.md` said the opposite, so it was corrected rather
+than left to rot, with the supersession written down because the old numbers are
+still in the history. Separately, TONE.md disagrees with itself: its `tineDecay`
+formula reaches 520 ms at the bottom of the playfield with TONE fully up, past
+both its own "~150–400 ms" note and its rule "do not lengthen `tineDecay` past
+~0.5 s". Its own protect-list wins, so that one corner is clamped to 0.5 s and
+the formula is verbatim everywhere else. `spec/voice.test.ts` was the thing that
+caught it — it asserts the five "protect these" rules by name, and rule 1 went
+red against the doc's own arithmetic.
+
+**Verified:**
+`pnpm check` green, 54 tests. That measures the arithmetic, and the arithmetic
+was never the question — "warm" is a claim about output.
+
+So the output got measured. `Page.addScriptToEvaluateOnNewDocument` wrapping
+`AudioNode.prototype.connect` taps anything connecting to `ctx.destination` into
+an extra `AnalyserNode` — a probe that exists only in the harness and never in
+shipped code. On one held note at channel 01: at 300 ms the fundamental (129 Hz
+bin) sits 21 dB above the octave and 45 dB above the tine residue at 914 Hz; at
+1 s only the fundamental and its octave remain, 30 dB apart, and everything else
+is at the floor. That is TONE.md's "nearly sine body", confirmed rather than
+assumed, and it is protect-rule #3 checked where the rule actually applies.
+After release the bus reads 0.00017 RMS — silent, nothing stuck.
+
+Bus RMS came out at 0.099 for one note and 0.223 for eight, against a voice peak
+that dropped from ~0.95 to 0.155. The CARRIER needle law was refitted to those
+two measurements: a single note now reads 43% of scale and a full chord 80%,
+where the old square-root law parked a single note near mid-scale and never got
+past 69%.
+
+**Commit:** [`72ffe25`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit4-jnheinrich451-eng/commit/72ffe25)
+
+**What happened:**
+I nearly shipped "RADIO's band filter does nothing" as a finding, and it was
+wrong twice over.
+
+The first measurement compared one NORM strike against one RADIO strike and
+found the high bands *louder* in RADIO — backwards from a filter that drops
+8600 Hz to 4600 Hz. I then compared the ratio between two bands instead of their
+levels, reasoning that a ratio is immune to gain differences, and got a 0.1 dB
+difference where 2.8 dB was predicted. Two independent-looking checks agreeing
+is persuasive, and both were measuring noise.
+
+The fault was in the experiment, not the instrument. TONE.md specifies that `v`,
+the bar detune and the drift LFO are all per-strike random — I had implemented
+that deliberately an hour earlier — and the tine index varies about 16% strike to
+strike, which in FM moves several dB of high-partial energy around. The spread
+across single strikes turned out to be 5.3–7.3 dB, comfortably larger than the
+effect I was hunting. Comparing two single strikes could not have worked.
+
+Eight strikes per mode with a median, comparing spectral tilt rather than level,
+gave NORM −22.70 dB, RADIO −28.18 dB, NORM again −22.73 dB. The filter darkens
+the top by 5.5 dB and returns to within 0.03 dB of its starting value. The
+lesson is now in `CLAUDE.md` rather than in my head: against a deliberately
+stochastic instrument, a single-sample measurement is not evidence, and the
+randomness I designed in is the first thing that should have occurred to me when
+a measurement came back incoherent.
