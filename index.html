@@ -3,22 +3,129 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>COMP4020 prototype</title>
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="VOX-8: an eight-channel struck-tine synthesiser played in the browser with pointer, touch or the A-K keys. Sound is generated live by the Web Audio API."
+    />
+    <title>VOX-8 · phosphor synthesis deck</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <header>
-      <nav aria-label="Primary">
-        <a href="./">Home</a>
-      </nav>
-    </header>
-    <main>
-      <h1>COMP4020 prototype</h1>
-      <p data-testid="intro">
-        Replace this with your prototype. This week's brief is on the course website;
-        <code>spec/README.md</code> explains how the checks in this repo relate to it.
-      </p>
-    </main>
+    <div class="rig">
+      <header class="rig__head">
+        <h1 class="rig__name">VOX-8 <b>phosphor synthesis deck</b></h1>
+        <nav class="rig__nav" aria-label="Primary">
+          <a href="#playfield" aria-current="page">PLAY</a>
+          <a href="#deck">DECK</a>
+          <a href="#rail">DATA</a>
+          <a href="#panel">TUNE</a>
+        </nav>
+      </header>
+
+      <main class="rig__body">
+        <section class="screen" aria-label="Instrument">
+          <div class="screen__head">
+            <span class="tag" data-lamp id="tag-power" data-on="false">PWR</span>
+            <span class="tag">8-CH STRUCK TINE</span>
+            <span class="tag" data-lamp id="tag-pedal" data-on="false">SUSTAIN</span>
+            <span class="tag tag--spacer"></span>
+            <span class="tag tag--clock">T+<span id="uptime">00:00:00</span></span>
+          </div>
+
+          <div class="screen__stage">
+            <div class="stage__glass">
+              <canvas
+                id="playfield"
+                class="stage__canvas"
+                tabindex="0"
+                aria-label="Playfield: eight vertical channel bands. Press and drag anywhere to play, or use the A to K keys."
+              ></canvas>
+
+              <!-- The opening screen. Its only job is to get the first sound out
+                   of a stranger, so it says the two gestures and nothing else. -->
+              <div class="invite" id="invite" data-open="true">
+                <p class="invite__lead">PRESS ANYWHERE TO PLAY</p>
+                <p class="invite__sub">
+                  drag across the eight bands &middot; low is soft and long, high is bright and fast
+                </p>
+                <p class="invite__sub">or press <b>A S D F G H J K</b> &middot; there are no wrong notes</p>
+              </div>
+            </div>
+
+            <aside class="rail" id="rail" aria-label="Telemetry">
+              <h2 class="rail__title">DATA</h2>
+              <dl class="rail__list">
+                <div class="rail__row"><dt>MODE</dt><dd id="tm-mode">NORM</dd></div>
+                <div class="rail__row"><dt>TONE</dt><dd id="tm-tone">055</dd></div>
+                <div class="rail__row"><dt>DECAY</dt><dd id="tm-decay">050</dd></div>
+                <div class="rail__row"><dt>SPACE</dt><dd id="tm-space">030</dd></div>
+                <div class="rail__row"><dt>BAND</dt><dd id="tm-band">--</dd></div>
+                <div class="rail__row"><dt>VOX</dt><dd id="tm-vox">00/12</dd></div>
+              </dl>
+              <div class="vox-bar" id="tm-voxbar" aria-hidden="true"><i class="vox-bar__fill"></i></div>
+
+              <div class="gauge">
+                <span class="gauge__label">CARRIER</span>
+                <div class="gauge__face">
+                  <i class="gauge__tick gauge__tick--l"></i>
+                  <i class="gauge__tick gauge__tick--c"></i>
+                  <i class="gauge__tick gauge__tick--r"></i>
+                  <i class="gauge__needle" id="tm-needle"></i>
+                </div>
+                <span class="gauge__state" id="tm-lock" data-locked="false">SCAN</span>
+              </div>
+            </aside>
+          </div>
+
+          <div class="deck" id="deck" data-keys="idle" aria-hidden="true">
+            <span class="deck__cell"><b class="deck__num">01</b><i class="deck__key">A</i></span>
+            <span class="deck__cell"><b class="deck__num">02</b><i class="deck__key">S</i></span>
+            <span class="deck__cell"><b class="deck__num">03</b><i class="deck__key">D</i></span>
+            <span class="deck__cell"><b class="deck__num">04</b><i class="deck__key">F</i></span>
+            <span class="deck__cell"><b class="deck__num">05</b><i class="deck__key">G</i></span>
+            <span class="deck__cell"><b class="deck__num">06</b><i class="deck__key">H</i></span>
+            <span class="deck__cell"><b class="deck__num">07</b><i class="deck__key">J</i></span>
+            <span class="deck__cell"><b class="deck__num">08</b><i class="deck__key">K</i></span>
+          </div>
+        </section>
+
+        <section class="panel" id="panel" aria-label="Controls">
+          <div class="pots">
+            <div class="pot">
+              <div class="pot__dial" id="knob-tone" aria-label="Tone"><i class="pot__pin"></i></div>
+              <span class="pot__name">TONE</span>
+              <span class="pot__value" id="knob-tone-value">055</span>
+            </div>
+            <div class="pot">
+              <div class="pot__dial" id="knob-decay" aria-label="Decay"><i class="pot__pin"></i></div>
+              <span class="pot__name">DECAY</span>
+              <span class="pot__value" id="knob-decay-value">050</span>
+            </div>
+            <div class="pot">
+              <div class="pot__dial" id="knob-space" aria-label="Space"><i class="pot__pin"></i></div>
+              <span class="pot__name">SPACE</span>
+              <span class="pot__value" id="knob-space-value">030</span>
+            </div>
+          </div>
+
+          <div class="rocker" id="rocker" role="radiogroup" aria-label="Scan mode" data-mode="NORM">
+            <span class="rocker__name">SCAN MODE</span>
+            <div class="rocker__bank">
+              <button type="button" role="radio" data-mode="NORM" aria-checked="true">NORM</button>
+              <button type="button" role="radio" data-mode="CHOR" aria-checked="false">CHOR</button>
+              <button type="button" role="radio" data-mode="RADIO" aria-checked="false">RADIO</button>
+            </div>
+          </div>
+
+          <p class="panel__hint">
+            drag or scroll a dial &middot; <b>SPACE</b> holds the sustain pedal &middot; nothing here can be
+            set to a setting that stops it playing
+          </p>
+        </section>
+      </main>
+    </div>
+
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

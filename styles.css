@@ -1,16 +1,581 @@
+/* Phosphor green on near-black, and nothing else. The casing is the same green
+   pushed almost to black rather than a second hue, so the only thing on the page
+   that is genuinely bright is the thing that is making a sound.
+
+   No gradients anywhere in here on purpose: depth comes from borders, flat fills
+   and shadow, which keeps the palette to one hue and keeps the CRT texture in
+   the canvas where the audio can drive it. */
+
+:root {
+  --ink-0: #030706;
+  --ink-1: #070d0b;
+  --ink-2: #0b1310;
+  --ink-3: #0f1a15;
+  --line: #1b2e25;
+  --phos: #57ffa0;
+  --phos-2: #35d780;
+  --phos-3: #1d8a55;
+  --mono: ui-monospace, "Cascadia Mono", "SF Mono", menlo, consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  padding: 2rem;
-  font-family: system-ui, sans-serif;
-  line-height: 1.6;
-  color: #1a1a1a;
+  padding: clamp(0.5rem, 2vw, 1.5rem);
+  background: var(--ink-0);
+  color: var(--phos-2);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
-main {
-  max-width: 40rem;
+/* ---- casing ------------------------------------------------------------- */
+
+.rig {
+  max-width: 1120px;
   margin: 0 auto;
+  padding: clamp(0.6rem, 1.6vw, 1.1rem);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--ink-1);
+  box-shadow:
+    inset 0 1px 0 rgb(87 255 160 / 6%),
+    inset 0 -2px 0 rgb(0 0 0 / 60%),
+    0 24px 60px rgb(0 0 0 / 70%);
 }
 
-a {
-  color: #0b5fff;
+.rig__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 0.35rem 0.7rem;
+}
+
+.rig__name {
+  margin: 0;
+  color: var(--phos);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+}
+
+.rig__name b {
+  color: var(--phos-3);
+  font-size: 0.66rem;
+  font-weight: 400;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+.rig__nav {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.rig__nav a {
+  padding: 0.2rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--phos-3);
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  text-decoration: none;
+}
+
+.rig__nav a:hover,
+.rig__nav a:focus-visible {
+  border-color: var(--phos-3);
+  color: var(--phos);
+}
+
+.rig__nav a[aria-current="page"] {
+  border-color: var(--phos-3);
+  color: var(--ink-0);
+  background: var(--phos-3);
+}
+
+.rig__body {
+  display: grid;
+  gap: 0.75rem;
+}
+
+/* ---- screen ------------------------------------------------------------- */
+
+.screen {
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--ink-2);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 70%);
+}
+
+.screen__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  padding-bottom: 0.6rem;
+}
+
+.tag {
+  position: relative;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--phos-3);
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  white-space: nowrap;
+}
+
+.tag--spacer {
+  flex: 1;
+  border: 0;
+}
+
+.tag--clock {
+  color: var(--phos-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.tag[data-lamp] {
+  padding-left: 1.35rem;
+}
+
+.tag[data-lamp]::before {
+  position: absolute;
+  top: calc(50% - 3px);
+  left: 0.5rem;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--line);
+  content: "";
+}
+
+.tag[data-lamp][data-on="true"] {
+  border-color: var(--phos-3);
+  color: var(--phos);
+}
+
+.tag[data-lamp][data-on="true"]::before {
+  background: var(--phos);
+  box-shadow: 0 0 6px var(--phos);
+}
+
+.screen__stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 158px;
+  gap: 0.7rem;
+}
+
+.stage__glass {
+  position: relative;
+  height: clamp(280px, 50vh, 460px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--ink-0);
+  box-shadow:
+    inset 0 0 40px rgb(0 0 0 / 90%),
+    inset 0 0 90px rgb(87 255 160 / 4%);
+}
+
+.stage__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.stage__canvas:focus-visible {
+  outline: 1px solid var(--phos-3);
+  outline-offset: -2px;
+}
+
+/* ---- the opening screen ------------------------------------------------- */
+
+.invite {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  padding: 1rem;
+  background: rgb(3 7 6 / 88%);
+  text-align: center;
+  pointer-events: none;
+}
+
+.invite[data-open="false"] {
+  opacity: 0;
+  transition: opacity 420ms ease-out;
+  visibility: hidden;
+}
+
+.invite__lead {
+  margin: 0 0 0.6rem;
+  color: var(--phos);
+  font-size: clamp(0.9rem, 2.6vw, 1.3rem);
+  letter-spacing: 0.28em;
+  text-shadow: 0 0 12px rgb(87 255 160 / 45%);
+}
+
+.invite__sub {
+  max-width: 56ch;
+  margin: 0.15rem 0;
+  color: var(--phos-3);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+}
+
+.invite__sub b {
+  color: var(--phos-2);
+  letter-spacing: 0.24em;
+}
+
+/* ---- telemetry rail ----------------------------------------------------- */
+
+.rail {
+  display: grid;
+  align-content: start;
+  padding: 0.5rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--ink-1);
+}
+
+.rail__title {
+  margin: 0 0 0.45rem;
+  color: var(--phos-3);
+  font-size: 0.6rem;
+  font-weight: 400;
+  letter-spacing: 0.34em;
+}
+
+.rail__list {
+  margin: 0;
+}
+
+.rail__row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.16rem 0;
+  border-bottom: 1px solid rgb(87 255 160 / 7%);
+  font-size: 0.68rem;
+}
+
+.rail__row dt {
+  color: var(--phos-3);
+  letter-spacing: 0.14em;
+}
+
+.rail__row dd {
+  margin: 0;
+  color: var(--phos);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+
+.vox-bar {
+  height: 4px;
+  margin-top: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+
+.vox-bar__fill {
+  display: block;
+  width: calc(var(--fill, 0) * 100%);
+  height: 100%;
+  background: var(--phos);
+  box-shadow: 0 0 6px rgb(87 255 160 / 60%);
+}
+
+.gauge {
+  display: grid;
+  justify-items: center;
+  margin-top: 0.75rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+}
+
+.gauge__label,
+.gauge__state {
+  color: var(--phos-3);
+  font-size: 0.58rem;
+  letter-spacing: 0.24em;
+}
+
+.gauge__state[data-locked="true"] {
+  color: var(--phos);
+  text-shadow: 0 0 8px rgb(87 255 160 / 60%);
+}
+
+.gauge__face {
+  position: relative;
+  width: 100%;
+  height: 54px;
+  margin: 0.3rem 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--ink-0);
+}
+
+.gauge__tick {
+  position: absolute;
+  bottom: 8px;
+  left: calc(50% - 0.5px);
+  width: 1px;
+  height: 7px;
+  background: var(--phos-3);
+  transform: rotate(var(--tick, 0deg)) translateY(-30px);
+  transform-origin: bottom center;
+}
+
+.gauge__tick--l {
+  --tick: -48deg;
+}
+
+.gauge__tick--c {
+  --tick: 0deg;
+}
+
+.gauge__tick--r {
+  --tick: 48deg;
+}
+
+.gauge__needle {
+  position: absolute;
+  bottom: 8px;
+  left: calc(50% - 0.5px);
+  width: 1px;
+  height: 34px;
+  background: var(--phos);
+  box-shadow: 0 0 7px rgb(87 255 160 / 70%);
+  transform: rotate(var(--swing, -48deg));
+  transform-origin: bottom center;
+}
+
+/* ---- deck --------------------------------------------------------------- */
+
+.deck {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 0.3rem;
+  padding-top: 0.6rem;
+}
+
+.deck__cell {
+  --lit: 0;
+
+  display: grid;
+  justify-items: center;
+  padding: 0.28rem 0;
+  border: 1px solid rgb(87 255 160 / calc(8% + var(--lit) * 60%));
+  border-radius: 4px;
+  background: rgb(87 255 160 / calc(var(--lit) * 14%));
+}
+
+.deck__num {
+  color: rgb(87 255 160 / calc(34% + var(--lit) * 66%));
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+}
+
+.deck__key {
+  color: var(--phos-3);
+  font-size: 0.58rem;
+  font-style: normal;
+  letter-spacing: 0.1em;
+  opacity: 0.28;
+}
+
+.deck[data-keys="used"] .deck__key {
+  color: var(--phos-2);
+  opacity: 1;
+  transition: opacity 500ms ease-out;
+}
+
+/* ---- panel -------------------------------------------------------------- */
+
+.panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem 1.4rem;
+  align-items: center;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--ink-2);
+}
+
+.pots {
+  display: flex;
+  gap: 1.1rem;
+}
+
+.pot {
+  display: grid;
+  justify-items: center;
+  gap: 0.2rem;
+}
+
+.pot__dial {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--ink-3);
+  box-shadow:
+    inset 0 2px 0 rgb(87 255 160 / 7%),
+    inset 0 -3px 6px rgb(0 0 0 / 80%);
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.pot__dial:hover,
+.pot__dial:focus-visible {
+  border-color: var(--phos-3);
+  outline: none;
+}
+
+.pot__pin {
+  position: absolute;
+  top: 5px;
+  left: calc(50% - 1px);
+  width: 2px;
+  height: 15px;
+  border-radius: 1px;
+  background: var(--phos);
+  box-shadow: 0 0 6px rgb(87 255 160 / 70%);
+  transform: rotate(var(--turn, 0deg));
+  transform-origin: 50% 18px;
+}
+
+.pot__name {
+  color: var(--phos-3);
+  font-size: 0.58rem;
+  letter-spacing: 0.2em;
+}
+
+.pot__value {
+  color: var(--phos);
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.rocker {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.rocker__name {
+  color: var(--phos-3);
+  font-size: 0.58rem;
+  letter-spacing: 0.22em;
+}
+
+.rocker__bank {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+.rocker__bank button {
+  padding: 0.4rem 0.75rem;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: var(--ink-3);
+  color: var(--phos-3);
+  font-family: inherit;
+  font-size: 0.62rem;
+  letter-spacing: 0.16em;
+  cursor: pointer;
+}
+
+.rocker__bank button:last-child {
+  border-right: 0;
+}
+
+.rocker__bank button:hover {
+  color: var(--phos-2);
+}
+
+.rocker__bank button[aria-checked="true"] {
+  background: var(--phos-3);
+  color: var(--ink-0);
+  box-shadow: inset 0 0 12px rgb(87 255 160 / 45%);
+}
+
+.panel__hint {
+  flex: 1 1 16rem;
+  margin: 0;
+  color: var(--phos-3);
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+}
+
+.panel__hint b {
+  color: var(--phos-2);
+}
+
+/* ---- narrow ------------------------------------------------------------- */
+
+@media (width <= 820px) {
+  .screen__stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Readouts left, needle right, and the VOX bar stays under the number it
+     belongs to — stacked, it drifted a whole column away from its own label. */
+  .rail {
+    grid-template-columns: minmax(0, 1fr) 132px;
+    gap: 0 0.9rem;
+    align-items: start;
+  }
+
+  .rail__title {
+    grid-column: 1 / -1;
+  }
+
+  .rail__list,
+  .vox-bar {
+    grid-column: 1;
+  }
+
+  .gauge {
+    grid-column: 2;
+    grid-row: 2 / span 2;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .deck__key {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .invite[data-open="false"],
+  .deck[data-keys="used"] .deck__key {
+    transition-duration: 1ms;
+  }
 }
