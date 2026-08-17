@@ -76,7 +76,32 @@ caught the one harness gap — `tsconfig.json` included only `["*.ts", "spec"]`,
 a new `src/` would have compiled unchecked. That went into the config before the
 first module landed.
 
-**4 — Citation.** _(pending — filled in with the commit hash once this lands)_
+**4 — Citation.**
+[`7b46c9a`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit4-jnheinrich451-eng/commit/7b46c9a)
+— the starter page replaced by the instrument, the harness changes in the same
+commit. `pnpm check` green: 47 tests across 4 files, 0 lint, 0 stylelint.
+
+The check that carried the most weight is not in that number. `pnpm check`
+cannot hear anything, so verification went through CDP: headless Chrome with
+`--autoplay-policy=no-user-gesture-required`, real `Input.dispatchMouseEvent` /
+`dispatchTouchEvent` / `dispatchKeyEvent` at the page, then reading back the
+telemetry the page computes from its own audio graph. A drag across five bands
+plus an A/F/K chord returned `VOX 07/12`, `BAND 08`, `CARRIER LOCK`, and deck
+cells lit at `[0.60, 0, 0.002, 0.60, 0.02, 0.53, 0, 0.60]` — the four struck
+bands, at the levels their envelopes were actually at. Releasing everything
+returned `VOX 00/12` and `SCAN` within three seconds, which is how I know no
+voice leaks and nothing sticks on. The sustain pedal was checked the same way:
+keys released with Space held still read `VOX 02/12` almost a second later, and
+`00/12` once the pedal lifted.
+
+That method also produced the two corrections that no test would have caught.
+The needle law was linear on RMS and pegged at its stop with three notes
+sounding, so it had stopped reporting anything — now a square-root law, like a
+moving-coil meter. And phosphor persistence at `0.26` stacked enough ghost
+frames that an eight-band chord buried the eight bands it was meant to be
+showing — now `0.44`, with impact rings sized off the short edge of the screen
+rather than the long one. Both were obvious in a screenshot and invisible to a
+green suite, which is the argument for looking.
 
 **Harness changes this entry produced:**
 
