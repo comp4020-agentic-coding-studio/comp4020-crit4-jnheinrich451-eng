@@ -39,11 +39,38 @@ file is the work.
 A playable touch instrument styled as a Pip-boy–style handheld device. Not a music-app UI mockup — the sound engine is real and the visuals are driven by it.
 
 ## Sound engine (do not simplify)
-- 8 channels, struck-piano/Rhodes voice: sine fundamental + restrained triangle + FM tine that collapses in 150–400 ms; filter opens on impact then closes.
+
+**`instructions/TONE.md` is the authority on the voice.** Every number in
+`src/engine.ts` comes from it; read it before touching `strike()`. (It says the
+function lives in `index.html` — it was written against a single-file build, and
+in this repo it is in `src/engine.ts`.) The notes below are the summary, not the
+source.
+
+- 8 channels, four oscillators per voice: sine fundamental, triangle bar, octave
+  sine, and an FM tine on its own carrier at 6:1 whose index collapses ~40x
+  inside 150–500 ms. That collapse, not the amplitude envelope, is what reads as
+  struck. Per-voice filter opens to `cut × 2.4` and closes to `cut × 0.62`.
 - Y position = articulation. Bottom: soft, dark, long. Top: bright, fast.
-- Body decay 3.5–5.5 s natural; release damping 0.35–2 s, shorter when released early.
-- 12-voice polyphony, oldest-voice culling, per-voice gain management, bus compressor + limiter.
-- Keyboard damping is faster than pointer damping (520 ms vs 700 ms) — intentional, keys feel percussive.
+- Body decay 3.5–5.4 s natural; release damping 0.28–2.6 s, shorter when
+  released early and longer at the bottom of the playfield.
+- 12-voice polyphony, oldest-voice culling, bus compressor + limiter.
+
+TONE.md supersedes three things this file used to say. Recorded rather than
+silently overwritten, because the old numbers are still in the git history:
+
+1. Damping was 0.35–2 s; it is now 0.28–2.6 s.
+2. Body decay was 3.5–5.5 s; it is now 3.5–5.4 s.
+3. **520 ms / 700 ms is now a *visual* constant, not an audio one.** This file
+   said keyboard damping was faster than pointer damping in the ear. TONE.md
+   puts the difference on screen instead — audio damping is source-independent,
+   and a keyed band decays faster than a dragged one so keys still read as more
+   percussive. `VISUAL_DAMP_S` in `src/engine.ts` is where it lives.
+
+TONE.md also disagrees with itself in one place: its `tineDecay` formula reaches
+520 ms at the bottom of the playfield with TONE fully up, past both its own
+"~150–400 ms" note and its rule "do not lengthen `tineDecay` past ~0.5 s". The
+rule is the half the doc says to protect, so the one out-of-range corner is
+clamped to 0.5 s and the formula is verbatim everywhere else.
 
 ## Visual language
 Phosphor-green CRT. Playfield: 8 bands (01–08), channel wash, boundary brightening, impact rings, bloom (wide at bottom, sharp at top), ringing waveforms, drag-trace persistence. Keyboard strikes excite bands *from within* — center-out attack with pulse heads (~200 ms), bloom → resonance wash → decay with an internal shimmering line.
@@ -82,6 +109,23 @@ and read the telemetry the page computes from the audio graph. `VOX`, `BAND`,
 move, sound is genuinely flowing; if `VOX` returns to `00/12` after release,
 nothing is stuck or leaking. That check found the needle law pegging at three
 notes and the persistence burying the bands — neither is visible from a test.
+
+For claims about the *tone* rather than the plumbing, measure the output.
+`Page.addScriptToEvaluateOnNewDocument` can wrap `AudioNode.prototype.connect`
+so anything connecting to `ctx.destination` is also tapped into an extra
+`AnalyserNode` — a probe that lands only in the test harness and never in
+shipped code. `getFloatFrequencyData` off that probe is how "the fundamental
+stays loudest" stops being an assumption.
+
+Two traps in that measurement, both of which produced a wrong answer first:
+
+- **Compare tilts, not levels.** A level moves with chorus gain and with the
+  strike's random tine index; the difference between two bands does not.
+- **Average several strikes.** `v`, the bar detune and the drift LFO are
+  per-strike random by design, and the spread across single strikes is 5+ dB —
+  larger than most effects worth measuring. Eight strikes and a median turned
+  "RADIO's band filter does nothing" into "RADIO darkens the top by 5.5 dB and
+  returns to within 0.03 dB when switched back".
 
 ## Rules for future changes
 - Both input modes must respond identically to TONE / DECAY / SPACE / SCAN MODE.

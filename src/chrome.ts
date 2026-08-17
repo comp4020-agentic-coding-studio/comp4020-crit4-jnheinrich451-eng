@@ -216,11 +216,13 @@ export class Telemetry {
     f.vox.textContent = `${String(vox).padStart(2, "0")}/${MAX_VOICES}`;
     f.voxBar.style.setProperty("--fill", (vox / MAX_VOICES).toFixed(3));
 
-    // A square-root law, like a moving-coil meter: a linear one pegged at the
-    // stop as soon as more than about three notes were sounding, so the needle
-    // stopped saying anything about how hard the instrument was being played.
+    // Fitted to measured bus RMS, not guessed: the Rhodes voice peaks at 0.155
+    // where the old one peaked near 0.95, so the previous law parked a single
+    // note near mid-scale and never got past 0.69 on a full chord. Measured
+    // 0.099 RMS for one note and 0.223 for eight; this law puts those at 43%
+    // and 80%, leaving travel at both ends.
     const rms = e.rms();
-    this.needleValue += (Math.min(1, Math.sqrt(rms) * 1.45) - this.needleValue) * 0.18;
+    this.needleValue += (Math.min(1, (rms / 0.3) ** 0.75) - this.needleValue) * 0.18;
     f.needle.style.setProperty("--swing", `${(this.needleValue - 0.5) * 96}deg`);
     // "Lock" is an honest threshold on the bus, not a prop: the needle has to be
     // reading something for the device to claim it.
