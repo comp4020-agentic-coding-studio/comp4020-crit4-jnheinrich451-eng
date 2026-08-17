@@ -110,7 +110,7 @@ Both were caught by rendering the page and reading it, and neither was reachable
 from the diff. That is the argument for the CDP harness being in `CLAUDE.md`
 rather than in this file only.
 
-## 2026-08-18 02:2x — Finding the skill that already existed
+## 2026-08-18 02:22 — Finding the skill that already existed
 
 **Prompt:**
 
