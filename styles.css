@@ -177,11 +177,14 @@ body {
 .screen__stage {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 158px;
+  grid-template-rows: auto auto;
   gap: 0.7rem;
 }
 
 .stage__glass {
   position: relative;
+  grid-column: 1;
+  grid-row: 1;
   height: clamp(280px, 50vh, 460px);
   overflow: hidden;
   border: 1px solid var(--line);
@@ -234,7 +237,9 @@ body {
 }
 
 .invite__sub {
-  max-width: 56ch;
+  /* letter-spacing means a character occupies ~1.17ch, so this holds about 77
+     characters, not 90 — which is what the longer hint line needs. */
+  max-width: 90ch;
   margin: 0.15rem 0;
   color: var(--phos-3);
   font-size: 0.7rem;
@@ -248,9 +253,13 @@ body {
 
 /* ---- telemetry rail ----------------------------------------------------- */
 
+/* Four rows with the last one elastic, so the gauge can sit at the foot of a
+   rail that is now taller than its contents. */
 .rail {
   display: grid;
-  align-content: start;
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  grid-template-rows: auto auto auto 1fr;
   padding: 0.5rem 0.55rem;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -306,6 +315,7 @@ body {
 
 .gauge {
   display: grid;
+  align-self: end;
   justify-items: center;
   margin-top: 0.75rem;
   padding-top: 0.6rem;
@@ -372,17 +382,27 @@ body {
 
 /* ---- deck --------------------------------------------------------------- */
 
+/* No gap: a gap makes each track (W - 7g)/8 wide, which walks the marker
+   centres a couple of pixels off the band centres they stand for. Tracks are
+   exactly W/8 and the visible box is inset instead, so marker N sits dead
+   centre under band N at every width. */
 .deck {
   display: grid;
+  grid-column: 1;
+  grid-row: 2;
   grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: 0.3rem;
-  padding-top: 0.6rem;
+
+  /* The glass has a 1px border and the canvas sits inside it, so the deck
+     track has to be inset by the same 1px or the eight markers spread a pixel
+     wider than the eight bands. */
+  padding: 0 1px;
 }
 
 .deck__cell {
   --lit: 0;
 
   display: grid;
+  margin: 0 0.15rem;
   justify-items: center;
   padding: 0.28rem 0;
   border: 1px solid rgb(87 255 160 / calc(8% + var(--lit) * 60%));
@@ -539,13 +559,25 @@ body {
 /* ---- narrow ------------------------------------------------------------- */
 
 @media (width <= 820px) {
+  /* One column: glass, then deck, then rail, in source order. The explicit
+     desktop placement has to be handed back or the three of them fight over
+     two tracks that no longer exist. */
   .screen__stage {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+
+  .stage__glass,
+  .deck,
+  .rail {
+    grid-row: auto;
+    grid-column: 1;
   }
 
   /* Readouts left, needle right, and the VOX bar stays under the number it
      belongs to — stacked, it drifted a whole column away from its own label. */
   .rail {
+    grid-template-rows: none;
     grid-template-columns: minmax(0, 1fr) 132px;
     gap: 0 0.9rem;
     align-items: start;
@@ -563,6 +595,7 @@ body {
   .gauge {
     grid-column: 2;
     grid-row: 2 / span 2;
+    align-self: start;
     margin-top: 0;
     padding-top: 0;
     border-top: 0;
