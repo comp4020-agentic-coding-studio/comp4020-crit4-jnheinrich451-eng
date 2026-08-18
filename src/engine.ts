@@ -169,6 +169,14 @@ export function dampTime(b01: number, heldS: number, dk: number): number {
   return clamp(rel, DAMP_MIN, DAMP_MAX);
 }
 
+/** How many voices must go before another can be struck.
+ *
+ *  Pure so the cap can be asserted in a test: an AudioContext cannot be built
+ *  in a test runner, but the arithmetic that makes 12 mean 12 can. */
+export function voicesToCull(liveCount: number, max: number = MAX_VOICES): number {
+  return Math.max(0, liveCount - (max - 1));
+}
+
 type Voice = {
   id: number;
   channel: number;
@@ -362,7 +370,7 @@ export class Engine {
     for (const v of this.live) {
       if (v.channel === ch && v.source === source && v.releasedAt === null) this.damp(v, 0.08);
     }
-    if (this.live.length >= MAX_VOICES) this.cull();
+    for (let n = voicesToCull(this.live.length); n > 0; n -= 1) this.cull();
 
     // Per-strike randomness, never quantised: the bar detune keeps repeated
     // notes from phase-cancelling identically, and the drift LFO keeps a held
@@ -541,9 +549,35 @@ export class Engine {
   /** Oldest first — with twelve voices the note being stolen is always the one
    *  furthest into its decay, so the theft is the least audible one available. */
   private cull(): void {
-    const oldest = this.live.reduce((a, b) => (a.startedAt <= b.startedAt ? a : b));
-    if (oldest.releasedAt === null) this.damp(oldest, 0.05);
-    else this.stopAfter(oldest, 0.05);
+    if (this.live.length === 0) return;
+    this.retire(this.live.reduce((a, b) => (a.startedAt <= b.startedAt ? a : b)), 0.05);
+  }
+
+  /** Take a voice out of the polyphony budget now and fade what is left of it.
+   *
+   *  The list membership has to drop synchronously. Culling used to lean on the
+   *  oscillator's `onended` to remove the voice, which lands ~250 ms later —
+   *  long enough for a fast drag to strike a dozen more times before the slot
+   *  came free, so twelve-voice polyphony was not a cap at all and VOX climbed
+   *  past 60/12. The 50 ms fade is short enough to be inaudible and long enough
+   *  not to click, which a hard stop on a still-ringing voice would. */
+  private retire(v: Voice, fade: number): void {
+    const ctx = this.ctx;
+    if (ctx === null) return;
+    const now = ctx.currentTime;
+    if (v.releasedAt === null) {
+      v.releasedAt = now;
+      v.levelAtRelease = this.levelAt(v, now);
+    }
+    v.dampTau = fade / 5;
+    // Wherever the envelope has got to, go from there: this voice may already
+    // be mid-release, so re-asserting `peak` would make it jump back up.
+    const from = v.amp.gain.value;
+    v.amp.gain.cancelScheduledValues(now);
+    v.amp.gain.setValueAtTime(from, now);
+    v.amp.gain.setTargetAtTime(0, now, v.dampTau);
+    this.stopAfter(v, fade + 0.02);
+    this.live = this.live.filter((x) => x !== v);
   }
 
   private stopAfter(v: Voice, seconds: number): void {

@@ -305,9 +305,12 @@ body {
   border-radius: 2px;
 }
 
+/* Clamped, but the NUMBER beside it is not: if the polyphony cap ever breaks
+   again the readout should still say 20/12 so the bug is visible, while the
+   bar stops short of shooting out through the side of the rail. */
 .vox-bar__fill {
   display: block;
-  width: calc(var(--fill, 0) * 100%);
+  width: min(100%, calc(var(--fill, 0) * 100%));
   height: 100%;
   background: var(--phos);
   box-shadow: 0 0 6px rgb(87 255 160 / 60%);

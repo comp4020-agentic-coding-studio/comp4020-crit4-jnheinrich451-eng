@@ -17,6 +17,7 @@ import {
   articulate,
   channelFreq,
   dampTime,
+  voicesToCull,
 } from "../src/engine";
 
 const TONE_DEFAULT = 0.5;
@@ -221,5 +222,26 @@ describe("damping", () => {
 describe("polyphony", () => {
   it("holds twelve voices", () => {
     expect(MAX_VOICES).toBe(12);
+  });
+});
+
+describe("polyphony is a cap, not a suggestion", () => {
+  it("frees enough room for the incoming voice", () => {
+    // A fast drag strikes far quicker than a culled voice's oscillator can
+    // report that it has stopped, so culling exactly once per strike let the
+    // list grow without bound — VOX read 20/12, and 60/12 if you dragged hard.
+    // The count culled has to be derived from how far over the line the list
+    // actually is.
+    expect(voicesToCull(0)).toBe(0);
+    expect(voicesToCull(MAX_VOICES - 1)).toBe(0);
+    expect(voicesToCull(MAX_VOICES)).toBe(1);
+    expect(voicesToCull(MAX_VOICES + 8)).toBe(9);
+  });
+
+  it("leaves exactly one slot open however far over the list has drifted", () => {
+    for (const live of [0, 1, 11, 12, 20, 63, 400]) {
+      const after = live - voicesToCull(live) + 1;
+      expect(after, `${live} live`).toBeLessThanOrEqual(MAX_VOICES);
+    }
   });
 });
