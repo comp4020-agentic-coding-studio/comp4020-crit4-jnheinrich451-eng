@@ -319,3 +319,80 @@ tracking needs its character-count cap divided by that factor. 90ch fits it.
 
 Small, but it is the same class of error as the layout fault it appeared next
 to: a number that looked like it was derived and was actually guessed.
+
+## 2026-08-18 11:56 — Twelve-voice polyphony that wasn't
+
+**Prompt:**
+
+> you check the bug, VOX bar, it excceeds the 12! And it seems, I can test it to
+> 60+, as long as I move the cursor fast from those steps. If we need limit, or
+> reflect the true condition? Like we set VOX to 80?
+
+Annotated screenshot: `VOX 20/12`, with the meter bar running out through the
+right-hand side of the rail.
+
+**Result:**
+A real bug, and the user's two options were the right two to weigh. I took the
+first — enforce the cap — because twelve is a design decision from `CLAUDE.md`
+("12-voice polyphony, oldest-voice culling") and `TONE.md` ("compressor and
+limiter exist because 12 voices of sine stack fast"), not a display choice.
+Raising the readout to 80 would have made the number honest about a state the
+audio chain is not built for: sixty voices is three hundred oscillators, and the
+limiter is sized for twelve. The fix belonged in the engine, not the label.
+
+The cause was that culling never actually culled. `cull()` damped the oldest
+voice and scheduled its oscillators to stop, but the voice stayed in the live
+list until `onended` fired ~250 ms later — and `strike()` called `cull()` at most
+once per note. A drag crossing band boundaries strikes far faster than 250 ms, so
+each strike added one voice and freed none. The cap was a comment, not a
+mechanism.
+
+Culling now removes the voice from the list synchronously and fades what remains
+over 50 ms rather than cutting it — short enough to be inaudible, long enough not
+to click, which a hard stop on a still-ringing voice would. How many to cull is
+derived from how far over the line the list is, through a pure `voicesToCull()`
+that a test can assert, instead of one speculative cull per strike.
+
+One deliberate asymmetry in the display fix: the **bar** is clamped so it can
+never break the rail's layout again, and the **number** is not. If the cap breaks
+a second time the readout should still say `20/12` and give the bug away.
+Clamping both would have turned a visible fault into a silent one, which is the
+same trade `CLAUDE.md`'s "telemetry reads real state, no fake numbers" is about.
+
+**Verified:**
+`pnpm check` green at 56 tests, two of them new and asserting the cap
+arithmetically.
+
+The part that mattered was proving the repro was real. Dispatching the drag over
+CDP and sampling peak VOX gave exactly 12/12 with `--fill` at 1.000 — but a pass
+that never reproduces the bug proves nothing about the fix, so I stashed just
+`src/engine.ts`, let the dev server hot-reload the pre-fix code, and ran the same
+input again: **15/12, with the bar at 1.250**. Restored the fix, re-ran, 12/12
+and 1.000, returning to 00/12 after release.
+
+Worth stating plainly that the scripted drag reproduces 15 where the user
+reported 60+. Each `Input.dispatchMouseEvent` is a round trip, so the harness
+simply cannot move a cursor as fast as a hand. It is the same bug at a lower
+severity, and the fix is a cap rather than a bigger budget, so the gap between 15
+and 60 does not change the conclusion — but the harness is not a substitute for
+someone actually dragging on it, which is how this was found.
+
+**Commit:** [`b083a01`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit4-jnheinrich451-eng/commit/b083a01)
+
+**What happened:**
+The user found this, not me, and my own harness had walked straight past it. The
+CDP pass I wrote two turns ago reads `VOX` on every run and had been printing
+`07/12` and `08/12` for three sessions — values that look fine and are fine. It
+never printed the peak, only a sample taken at one moment, and it never dragged
+faster than a leisurely eight steps. The instrument was never stressed, so the
+bug was never in the sample.
+
+The lesson is about what the harness was shaped to prove. It was written to
+answer "is sound flowing", and it answered that honestly and kept answering it.
+It was not written to answer "does the thing hold together when played hard",
+and reading a value with a denominator printed next to it — `07/12` — never
+prompted me to ask whether the denominator was enforced anywhere. A bound that
+appears in the UI is a claim, and claims in this repo are supposed to have tests.
+This one had a comment saying "12-voice polyphony, oldest-voice culling" in
+`CLAUDE.md`, which is exactly the kind of statement that reads as settled and
+turns out to be aspirational.
