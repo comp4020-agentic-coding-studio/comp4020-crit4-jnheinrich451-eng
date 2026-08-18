@@ -261,3 +261,61 @@ lesson is now in `CLAUDE.md` rather than in my head: against a deliberately
 stochastic instrument, a single-sample measurement is not evidence, and the
 randomness I designed in is the first thing that should have occurred to me when
 a measurement came back incoherent.
+
+## 2026-08-18 11:38 — The deck realigned under the playfield
+
+**Prompt:**
+
+> the tone has changed significantly! And for layout, pls change the right
+> vertical red box longer, nad place the keys: 01 A to 08 K, align with the
+> interactive window? I think this maybe fitter?
+
+Annotated screenshot: one red box round the telemetry rail, one round deck
+cells 01–07, with 08 stranded outside it under the rail.
+
+**Result:**
+The two asks turned out to be one fault. The deck was a **sibling** of
+`.screen__stage` rather than a cell inside it, so it spanned the full width of
+the screen section — which is why marker 08 sat under the rail instead of under
+band 08, and why the rail stopped one row short of the bottom. Making the deck a
+stage cell fixes both at once: the stage is now two columns by two rows, the
+glass and deck share column one, and the rail takes column two across both rows.
+
+Worth naming because the obvious fix was two separate ones — stretch the rail
+with a height, and shrink the deck with a width or a margin. Both would have
+worked at 1280px and drifted at every other width, because they would have been
+two numbers guessed to agree rather than one relationship expressed once. This
+is the fault `CLAUDE.md` §"absolute offsets" warns about in the ass1 repo, and it
+showed up here as a layout that looked deliberate and was not.
+
+**Verified:**
+Measured in page pixels over CDP rather than judged from the screenshot, because
+"aligned" is a claim with a number attached. Marker-to-band centre offsets came
+back `[-0.87, -0.62, -0.37, -0.12, 0.13, 0.38, 0.63, 0.88]` — visually fine,
+arithmetically wrong, and wrong in a pattern (a linear ramp through zero) that
+says the deck is a couple of pixels wider than the canvas rather than misplaced.
+
+Two causes, both found by the ramp rather than by looking. A grid `gap` makes
+each track `(W - 7g)/8` wide, so the markers spread; and the glass carries a 1px
+border with the canvas inside it, so the deck was 1px wider on each side. Tracks
+are now exactly `W/8` with the cells inset by margin, and the deck carries a
+matching 1px padding. Offsets are `[0, 0, 0, 0, 0, 0, 0, 0]` at 1280px and at
+390px. Also confirmed the narrow stack still reads canvas → deck → rail with no
+horizontal overflow, and `pnpm check` stayed green at 54 tests throughout.
+
+**Commit:** [`6c20baa`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit4-jnheinrich451-eng/commit/6c20baa)
+
+**What happened:**
+Nothing was flagged, but the layout change exposed a text-wrapping bug that had
+been there since the invite was written, and my first fix for it was wrong.
+
+Widening the stage re-flowed the opening screen so both hint lines broke
+mid-phrase — "there are no / wrong notes". I raised `max-width` from 56ch to
+78ch by counting the characters in the longest line, and it still wrapped. The
+reason is that `.invite__sub` carries `letter-spacing: 0.1em`, so a character
+occupies about 1.17ch, not 1ch, and 78ch holds about 67 characters. `ch` is the
+width of a "0", and letter-spacing is added *on top of* it — so any element with
+tracking needs its character-count cap divided by that factor. 90ch fits it.
+
+Small, but it is the same class of error as the layout fault it appeared next
+to: a number that looked like it was derived and was actually guessed.
