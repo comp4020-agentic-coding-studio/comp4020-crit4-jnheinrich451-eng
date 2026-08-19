@@ -396,3 +396,99 @@ appears in the UI is a claim, and claims in this repo are supposed to have tests
 This one had a comment saying "12-voice polyphony, oldest-voice culling" in
 `CLAUDE.md`, which is exactly the kind of statement that reads as settled and
 turns out to be aspirational.
+
+## 2026-08-19 12:14 — Four buttons that did nothing
+
+**Prompt:**
+
+> there are idle buttons DECK, DATA, TUNE, those button has display, yet no
+> function, pls find the /instructions/REUTILIZE_INTERFACE.md, and update!
+
+**Result:**
+Worked `instructions/REUTILIZE_INTERFACE.md` in the seven phases it specifies.
+The brief is long but its argument is one sentence — the four buttons must be
+views onto one machine, not pages — and almost every implementation decision
+falls out of taking that literally.
+
+The load-bearing choice was making the panes **inset overlays inside the glass**
+rather than swapping the stage's contents. A router that replaces the field is
+the obvious build and it fails the brief's own test: section 1 says switching
+must never stop audio or require returning to PLAY before using the keyboard,
+and section 12 says the field must not be replaced. Overlays inside the glass
+satisfy both by construction rather than by discipline — there is no code path
+that could stop a voice, because switching only sets `data-open`. The pane
+carries `pointer-events: none` so the eight bands stay playable underneath, and
+only the calibration bank takes events back.
+
+Two calls worth defending:
+
+**SPACE is now the pedal globally, including while a button holds focus.** It
+used to defer to the browser's button-activation behaviour. Section 1 says
+`SPACE` works globally, and a sustain pedal that stops working because you last
+touched a dial is not a pedal — so Space is always the pedal and buttons keep
+Enter. This trades a native convention away deliberately, which is the sort of
+thing that should be written down rather than discovered later.
+
+**Channel frequencies are computed rather than listed.** TONE.md gives eight
+literal figures and says to keep them as frequencies. REGISTER cannot transpose
+a hard-coded list, so they are now generated from a root plus the pentatonic
+interval set — equal temperament lands on every one of the doc's figures to
+within 0.005 Hz, about one beat every three minutes. The interval set is what
+TONE.md is really protecting, and a test now asserts it survives all fifteen
+register/root combinations, because "no wrong notes" holding in MID/C and
+quietly failing elsewhere is exactly the bug transposition invites.
+
+TUNE also surfaced a latent fault in TONE.md's own arithmetic. Its key-scaling
+term, `1 - 0.22*(freq-130)/200`, crosses zero above about 1 kHz — which ROOT A
+at HIGH reaches. A negative peak is not a quiet note, it is an inverted silent
+one. The term is bounded now, and a test walks every band of every tuning to say
+so.
+
+**Verified:**
+`pnpm check` green at 70 tests, 11 of them new: the four views and their inert
+panes, the field surviving under every view, the pane's pointer-events contract
+read out of the built CSS, DECK's flow order, DATA shipping an empty log, TUNE
+exposing no synthesis internals, and the legend saying three things and
+explaining nothing.
+
+Then the brief's own section 24 cold test, driven over CDP rather than read.
+Fresh load: `PLAY`, `00/12`, `BAND --`, no gate. Pressing `A` without touching
+any navigation: `01/12`, `B01`, `FREQ 130.81`, `LOCK`, one log row. Chord:
+`03/12`. Space held, keys released: still `03/12` seven hundred milliseconds
+later. Every pane open with `02/12` sounding and the other two `inert`. TUNE to
+HIGH/G retunes `B01` to `392.00` and logs `CAL REG HIGH` / `CAL ROOT G`. Point
+10 is the one I cared about most — returning to PLAY still reads `CHOR` and
+`G PENTA`, so nothing restarted.
+
+Measured the panes rather than eyeballing them: `scrollHeight` against
+`clientHeight` per pane, which caught DECK overflowing its box by 28 px at
+1280x900 while looking approximately fine.
+
+**Commit:** [`82d4bd1`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit4-jnheinrich451-eng/commit/82d4bd1)
+
+**What happened:**
+Three faults, and the interesting thing is that all three were invisible to a
+green suite and to a diff, and each was caught by a different kind of looking.
+
+**The active tab never moved.** `Views.render()` wrote `aria-selected` while the
+buttons are `role="radio"` and the stylesheet reads `aria-checked`. Both halves
+are defensible in isolation — `aria-selected` is right for a tab, `aria-checked`
+for a radio — and the result was that switching to DATA changed the view, opened
+the pane, and left PLAY lit. Section 11 asks for an obvious active state and the
+page had none. A screenshot found it in a second; nothing else would have. It now
+has a test asserting the whole page speaks one dialect, which also covers the
+rocker and both calibration banks.
+
+**The signal-flow arrows shipped as the literal text "93".** I wrote
+`content: "\2193"` through a Python rewrite, a backslash was eaten as an octal
+escape, and CSS received a control character followed by `93`. The lesson is
+narrow but real: escape sequences that pass through two languages before
+reaching the file are worth avoiding entirely, and the arrow is now the literal
+character. Only a screenshot showed it — the CSS was valid, the build was clean,
+and `content: "93"` is a perfectly legal declaration.
+
+**And my own harness kept killing the dev server.** I had been starting it as
+`pnpm dev | head -8`, so the moment vite wrote a ninth line it took SIGPIPE and
+died. It looked like the server "randomly" exiting between turns, which I had
+been re-starting without diagnosing for three sessions. The pipe was there to
+keep the tool output short; it cost more than it saved.
