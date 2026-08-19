@@ -492,3 +492,63 @@ and `content: "93"` is a perfectly legal declaration.
 died. It looked like the server "randomly" exiting between turns, which I had
 been re-starting without diagnosing for three sessions. The pipe was there to
 keep the tool output short; it cost more than it saved.
+
+## 2026-08-19 14:23 — Fitting the device to the screen
+
+**Prompt:**
+
+> if you can like make it a full screen? Auto fit to screen version?
+
+**Result:**
+The rig sat in a 1120 px box with a playfield pinned to
+`clamp(280px, 50vh, 460px)`, so on a 1080p display most of the screen was
+background. It now fills the window and the playfield takes whatever height is
+left after the header, deck and control panel have had theirs.
+
+The mechanism worth naming is `min-height: 0` on every intermediate box. A grid
+or flex child defaults to `min-height: auto`, which refuses to shrink below its
+content — so a `1fr` row that looks like it should give and take simply
+overflows instead, and the page grows a scrollbar rather than the field
+shrinking. Three nested boxes here each needed it, and the symptom of missing
+one is not a layout error but a scrollbar, which is easy to accept as normal.
+
+`100dvh` rather than `100vh`: on a phone `vh` counts browser chrome that is not
+actually on screen, so `100vh` guarantees the exact scrollbar the change is
+meant to remove.
+
+Two judgement calls beyond the literal ask:
+
+**The dial scales now.** Full height made the rail about 750 px tall with the
+readouts at the top and the meter at the foot, and a 54 px meter in that panel
+looked like a placeholder. The face is `clamp(54px, 13vh, 132px)` and the needle
+and ticks derive from a `--dial` property rather than carrying their own pixel
+values, so the proportions hold at any size — at the floor they resolve to
+exactly the numbers the fixed layout used, so nothing changed on a small screen.
+There is still deliberate empty casing between the readouts and the meter;
+REUTILIZE_INTERFACE.md section 20 asks for negative space to be retained rather
+than filled because new room appeared, so it stayed.
+
+**The stacking breakpoint moved from 820 px to 720 px.** Measuring turned up
+that an 820 px tablet was getting the phone layout and only 35% of its height as
+playfield. Side by side it gets 74%. Below the breakpoint the page still flows
+and scrolls rather than compressing to fit — stacked, the blocks are genuinely
+taller than a phone, and a squashed instrument is worse than a scrolled page.
+"Auto fit" is not worth honouring at the cost of the thing being fitted.
+
+**Verified:**
+`pnpm check` green at 70 tests, though none of them can see a layout.
+
+Measured instead, at seven viewports: `scrollHeight - clientHeight` and
+`scrollWidth - clientWidth` both zero at 1366x768, 1920x1080, 1440x900 at DPR 2,
+1280x620, 2560x1080, 390x844 and 820x1180. Field from 1023x293 on a short window
+to 2302x752 on ultrawide, with the canvas backing store correctly doubled at
+DPR 2 (2364x1144 for a 1182x572 field), which is the thing that silently goes
+blurry if a resize path is wrong.
+
+Then the case the change could plausibly break: the DECK/DATA/TUNE panes now
+live inside a glass whose height varies by 450 px. Checked each pane's bottom
+against the glass bottom at four sizes — all inside, DECK scrolling within
+itself where the field is short — and confirmed the instrument still sounds with
+a pane open at every one of them.
+
+**Commit:** [`bef591d`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit4-jnheinrich451-eng/commit/bef591d)
