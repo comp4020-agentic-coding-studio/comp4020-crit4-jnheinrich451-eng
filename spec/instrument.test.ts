@@ -74,7 +74,9 @@ describe("the player's choices shape what they hear", () => {
   });
 
   it("offers a three-way scan mode", () => {
-    const group = doc.querySelector('[role="radiogroup"]');
+    // Scoped to #rocker: the view switcher is a radiogroup too now, and a bare
+    // [role="radiogroup"] quietly matched whichever came first in the document.
+    const group = doc.getElementById("rocker");
     expect(group).toBeTruthy();
     const modes = [...(group?.querySelectorAll('[role="radio"]') ?? [])].map(
       (n) => (n as HTMLElement).dataset.mode,
@@ -161,5 +163,120 @@ describe("the device reads real state", () => {
 
   it("drives the needle off measured bus level rather than a timer", () => {
     expect(script).toMatch(/getFloatTimeDomainData/);
+  });
+});
+
+describe("PLAY / DECK / DATA / TUNE are views on one machine", () => {
+  it("offers all four, with PLAY selected on load", () => {
+    const views = [...(doc.getElementById("views")?.querySelectorAll('[role="radio"]') ?? [])];
+    expect(views.map((n) => (n as HTMLElement).dataset.view)).toEqual(["PLAY", "DECK", "DATA", "TUNE"]);
+    const checked = views.filter((n) => n.getAttribute("aria-checked") === "true");
+    expect(checked).toHaveLength(1);
+    expect((checked[0] as HTMLElement).dataset.view).toBe("PLAY");
+  });
+
+  it("cold-opens straight into PLAY with no gate in front of it", () => {
+    // No START button, no modal, no mandatory choice: the first gesture has to
+    // be a note. The invite is a hint over a live field, not a door.
+    expect(doc.getElementById("rig")?.dataset.view).toBe("PLAY");
+    expect(doc.getElementById("invite")?.getAttribute("data-open")).toBe("true");
+    expect(text).not.toMatch(/\b(start|begin|enter|continue|welcome|tutorial)\b/i);
+  });
+
+  it("keeps the playfield present under every view", () => {
+    // The panes live inside the glass, so no view can replace the instrument
+    // with a page. If one ever moved out, this goes red.
+    const glass = doc.querySelector(".stage__glass");
+    expect(glass?.querySelector("#playfield")).toBeTruthy();
+    for (const id of ["pane-deck", "pane-data", "pane-tune"]) {
+      expect(glass?.querySelector(`#${id}`), `#${id} must sit over the field`).toBeTruthy();
+    }
+  });
+
+  it("starts with every pane closed and inert", () => {
+    for (const id of ["pane-deck", "pane-data", "pane-tune"]) {
+      const pane = doc.getElementById(id);
+      expect(pane?.getAttribute("data-open"), id).toBe("false");
+      expect(pane?.hasAttribute("inert"), `${id} must be inert while closed`).toBe(true);
+    }
+  });
+
+  it("lets the field stay playable with a pane open", () => {
+    const css = readdirSync(DIST, { recursive: true, withFileTypes: true })
+      .filter((e) => e.name.endsWith(".css"))
+      .map((e) => readFileSync(join(e.parentPath, e.name), "utf8"))
+      .join("\n");
+    // The pane passes pointer events through; only the calibration bank takes
+    // them back. Without this a pane would silently disable half the field.
+    expect(css).toMatch(/\.pane\{[^}]*pointer-events:none/);
+    expect(css).toMatch(/\.cal__bank\{[^}]*pointer-events:auto/);
+  });
+});
+
+describe("DECK, DATA and TUNE say something true", () => {
+  it("gives DECK a schematic rather than prose", () => {
+    const deck = doc.getElementById("pane-deck")?.textContent ?? "";
+    for (const label of ["BAND ARRAY", "VOICE ENGINE", "POLYPHONY", "INPUT A", "INPUT B"]) {
+      expect(deck).toContain(label);
+    }
+    // A signal chain, in order.
+    const flow = [...(doc.querySelectorAll("#pane-deck .flow__step") ?? [])].map((n) => n.textContent);
+    expect(flow).toEqual(["INPUT", "BAND SELECT", "TINE / BODY", "TONE", "DECAY", "SPACE", "MASTER"]);
+    // No paragraphs explaining how to play.
+    expect(doc.querySelectorAll("#pane-deck p")).toHaveLength(0);
+  });
+
+  it("gives DATA live fields and a bounded log", () => {
+    for (const id of ["tm-peak", "tm-pedalstate", "tm-freq", "tm-register", "tm-cal", "tm-log"]) {
+      expect(doc.getElementById(id), `#${id} is missing`).toBeTruthy();
+    }
+    // The log is filled from engine events at runtime, so it ships empty — a
+    // pre-baked row would be exactly the fake telemetry this rules out.
+    expect(doc.getElementById("tm-log")?.children).toHaveLength(0);
+  });
+
+  it("keeps TUNE to calibration, with the scale locked", () => {
+    const tune = doc.getElementById("pane-tune")?.textContent ?? "";
+    expect(tune).toContain("REGISTER");
+    expect(tune).toContain("LOCKED");
+    const regs = [...(doc.getElementById("cal-register")?.querySelectorAll("[data-opt]") ?? [])];
+    expect(regs.map((n) => (n as HTMLElement).dataset.opt)).toEqual(["LOW", "MID", "HIGH"]);
+    // None of the synthesis internals are exposed as controls. Whole words
+    // only: a substring check fails on the panel's own heading, because
+    // CALIB-RATIO-N contains "RATIO".
+    for (const banned of ["RATIO", "RESONANCE", "LFO", "WAVEFORM", "ENVELOPE", "ATTACK"]) {
+      expect(tune, `TUNE must not expose ${banned}`).not.toMatch(new RegExp(`\b${banned}\b`, "i"));
+    }
+  });
+});
+
+describe("the bottom copy reads like a machine", () => {
+  it("states the three inputs and explains nothing", () => {
+    const legend = doc.querySelector(".legend")?.textContent?.replace(/\s+/g, " ").trim() ?? "";
+    expect(legend).toContain("STRIKE");
+    expect(legend).toContain("SUSTAIN");
+    expect(legend).toContain("DRAG");
+    // The old sentence was developer documentation; nothing here should read
+    // like an explanation of why the controls are safe.
+    expect(legend).not.toMatch(/nothing here|cannot|can be set|it playing/i);
+    expect(legend.length).toBeLessThan(90);
+  });
+});
+
+describe("the view switcher and the rocker speak the same dialect", () => {
+  it("uses aria-checked throughout, matching role=radio", () => {
+    // A stylesheet keyed on aria-checked plus a script writing aria-selected
+    // leaves the active tab lit on whichever view happened to load first, and
+    // both halves look correct in isolation.
+    const script = bundledScript();
+    expect(script).not.toMatch(/aria-selected/);
+    for (const group of ["views", "rocker", "cal-register", "cal-root"]) {
+      const radios = [...(doc.getElementById(group)?.querySelectorAll('[role="radio"]') ?? [])];
+      expect(radios.length, `#${group} has no radios`).toBeGreaterThan(1);
+      for (const r of radios) {
+        expect(r.hasAttribute("aria-checked"), `#${group} radio needs aria-checked`).toBe(true);
+      }
+      expect(radios.filter((r) => r.getAttribute("aria-checked") === "true")).toHaveLength(1);
+    }
   });
 });

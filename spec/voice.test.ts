@@ -10,9 +10,12 @@
 // ear and by the CDP pass.
 
 import { describe, expect, it } from "vitest";
+import type { Register, Root } from "../src/engine";
 import {
   CHANNEL_COUNT,
   MAX_VOICES,
+  REGISTERS,
+  ROOTS,
   VISUAL_DAMP_S,
   articulate,
   channelFreq,
@@ -28,7 +31,13 @@ describe("tuning: no two channels can sound wrong together", () => {
   it("is the eight frequencies TONE.md names, ascending", () => {
     expect(CHANNEL_COUNT).toBe(8);
     const freqs = Array.from({ length: CHANNEL_COUNT }, (_, i) => channelFreq(i));
-    expect(freqs).toEqual([130.81, 146.83, 164.81, 196.0, 220.0, 261.63, 293.66, 329.63]);
+    // TONE.md gives these to two decimals. They are computed from equal
+    // temperament now, because REGISTER cannot transpose a hard-coded list —
+    // so the assertion is that the computation still lands on the doc's figures.
+    const doc = [130.81, 146.83, 164.81, 196.0, 220.0, 261.63, 293.66, 329.63];
+    freqs.forEach((f, i) => {
+      expect(f, `channel ${i + 1}`).toBeCloseTo(doc[i], 2);
+    });
     for (let i = 1; i < freqs.length; i += 1) expect(freqs[i]).toBeGreaterThan(freqs[i - 1]);
   });
 
@@ -242,6 +251,65 @@ describe("polyphony is a cap, not a suggestion", () => {
     for (const live of [0, 1, 11, 12, 20, 63, 400]) {
       const after = live - voicesToCull(live) + 1;
       expect(after, `${live} live`).toBeLessThanOrEqual(MAX_VOICES);
+    }
+  });
+});
+
+describe("TUNE transposes without breaking the tuning", () => {
+  const semitones = (register: Register, root: Root): number[] => {
+    const base = channelFreq(0, register, root);
+    return Array.from({ length: CHANNEL_COUNT }, (_, i) =>
+      Math.round(12 * Math.log2(channelFreq(i, register, root) / base)),
+    );
+  };
+
+  it("keeps the same pentatonic interval set at every register and root", () => {
+    // This is the promise TUNE must not break: the shape moves, it never
+    // changes. If a transposition altered the intervals, "no wrong notes" would
+    // hold in MID/C and quietly stop holding everywhere else.
+    const reference = semitones("MID", "C");
+    expect(reference).toEqual([0, 2, 4, 7, 9, 12, 14, 16]);
+    for (const register of REGISTERS) {
+      for (const root of ROOTS) {
+        expect(semitones(register, root), `${register}/${root}`).toEqual(reference);
+      }
+    }
+  });
+
+  it("moves LOW and HIGH by exactly an octave", () => {
+    for (const root of ROOTS) {
+      for (let i = 0; i < CHANNEL_COUNT; i += 1) {
+        expect(channelFreq(i, "LOW", root)).toBeCloseTo(channelFreq(i, "MID", root) / 2, 6);
+        expect(channelFreq(i, "HIGH", root)).toBeCloseTo(channelFreq(i, "MID", root) * 2, 6);
+      }
+    }
+  });
+
+  it("keeps band ordering ascending in every tuning", () => {
+    for (const register of REGISTERS) {
+      for (const root of ROOTS) {
+        for (let i = 1; i < CHANNEL_COUNT; i += 1) {
+          expect(channelFreq(i, register, root)).toBeGreaterThan(channelFreq(i - 1, register, root));
+        }
+      }
+    }
+  });
+
+  it("never lets a transposition produce a silent or inverted note", () => {
+    // TONE.md's key-scaling term crosses zero above about 1 kHz, which ROOT A
+    // at HIGH reaches. A negative peak is not a quiet note, it is an inverted
+    // silent one, so the term is bounded — and this is what says so.
+    for (const register of REGISTERS) {
+      for (const root of ROOTS) {
+        for (let i = 0; i < CHANNEL_COUNT; i += 1) {
+          const f = channelFreq(i, register, root);
+          for (const tone of [0, 0.5, 1]) {
+            const s = articulate(0.62, f, tone, DECAY_DEFAULT);
+            expect(s.peak, `${register}/${root} band ${i + 1}`).toBeGreaterThan(0.03);
+            expect(s.peak).toBeLessThan(0.3);
+          }
+        }
+      }
     }
   });
 });

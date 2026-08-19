@@ -30,12 +30,22 @@ export type VoiceView = {
   released: boolean;
 };
 
-// C3 D3 E3 G3 A3 C4 D4 E4 — a pentatonic run, so any combination is consonant.
-// TONE.md gives these as frequencies rather than note numbers, so they are kept
-// as frequencies: a rounding difference here is audible as beating.
-const CHANNEL_HZ = [130.81, 146.83, 164.81, 196.0, 220.0, 261.63, 293.66, 329.63];
+export type Register = "LOW" | "MID" | "HIGH";
+export type Root = "C" | "D" | "F" | "G" | "A";
 
-export const CHANNEL_COUNT = CHANNEL_HZ.length;
+/** Major pentatonic, in semitones from the root: two octaves of the same five
+ *  notes. This is the interval set that makes any pair of bands consonant, so
+ *  it is the thing that must survive transposition — REGISTER and ROOT shift
+ *  where it sits, never what it is. */
+const PENTATONIC = [0, 2, 4, 7, 9, 12, 14, 16];
+
+const ROOT_MIDI: Record<Root, number> = { C: 48, D: 50, F: 53, G: 55, A: 57 };
+const REGISTER_SHIFT: Record<Register, number> = { LOW: -12, MID: 0, HIGH: 12 };
+
+export const REGISTERS: Register[] = ["LOW", "MID", "HIGH"];
+export const ROOTS: Root[] = ["C", "D", "F", "G", "A"];
+
+export const CHANNEL_COUNT = PENTATONIC.length;
 export const MAX_VOICES = 12;
 
 /** TONE.md: "Keyboard visuals damp at 520 ms vs pointer 700 ms so keys read as
@@ -63,10 +73,18 @@ const SMOOTH = 0.12;
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 const rand = (lo: number, hi: number): number => lo + Math.random() * (hi - lo);
 
+const midiToHz = (m: number): number => 440 * 2 ** ((m - 69) / 12);
+
 /** The pitch of a channel. Exported so the tuning can be asserted rather than
- *  taken on trust. */
-export function channelFreq(channel: number): number {
-  return CHANNEL_HZ[clamp(Math.round(channel), 0, CHANNEL_COUNT - 1)];
+ *  taken on trust.
+ *
+ *  TONE.md gives MID/C as eight literal frequencies. They are computed here
+ *  instead, because REGISTER cannot transpose a hard-coded list — equal
+ *  temperament reproduces every one of the doc's figures to within 0.005 Hz,
+ *  which is one beat every three minutes and change. */
+export function channelFreq(channel: number, register: Register = "MID", root: Root = "C"): number {
+  const ch = clamp(Math.round(channel), 0, CHANNEL_COUNT - 1);
+  return midiToHz(ROOT_MIDI[root] + REGISTER_SHIFT[register] + PENTATONIC[ch]);
 }
 
 /** Everything the articulation axis and the two shaping knobs decide about a
@@ -132,8 +150,14 @@ export function articulate(
 
   return {
     atk: 0.014 - b * 0.007,
-    // Key scaling: high notes quieter, as on the real thing.
-    peak: 0.155 * (0.86 + v * 0.16) * (1 - (0.22 * (freq - 130)) / 200),
+    // Key scaling: high notes quieter, as on the real thing. Bounded because
+    // TONE.md's formula assumes the MID register — it crosses zero above about
+    // 1 kHz, which ROOT A + HIGH reaches, and a negative peak is an inverted
+    // silent note rather than a quiet one.
+    peak:
+      0.155 *
+      (0.86 + v * 0.16) *
+      Math.min(1.15, Math.max(0.35, 1 - (0.22 * (freq - 130)) / 200)),
     body,
     bodyTau: body * 0.28,
     barPeak: (0.1 + b * 0.06) * (0.7 + t * 0.6),
@@ -176,6 +200,12 @@ export function dampTime(b01: number, heldS: number, dk: number): number {
 export function voicesToCull(liveCount: number, max: number = MAX_VOICES): number {
   return Math.max(0, liveCount - (max - 1));
 }
+
+/** One line of the machine's log. `at` is audio uptime in seconds, so the log
+ *  and the header clock cannot disagree. */
+export type EngineEvent = { at: number; band: number | null; kind: "STRIKE" | "RELEASE" | "PEDAL DOWN" | "PEDAL UP" | "CAL" ; note: string };
+
+const LOG_MAX = 10;
 
 type Voice = {
   id: number;
@@ -220,6 +250,11 @@ export class Engine {
   private knobs: Record<Knob, number> = { tone: 0.5, decay: 0.55, space: 0.28 };
   private mode: ScanMode = "NORM";
   private pedal = false;
+  private register: Register = "MID";
+  private root: Root = "C";
+  private log: EngineEvent[] = [];
+  private lastBand: number | null = null;
+  private lastFreqHz = 0;
 
   get running(): boolean {
     return this.ctx !== null && this.ctx.state === "running";
@@ -243,6 +278,50 @@ export class Engine {
 
   knob(name: Knob): number {
     return this.knobs[name];
+  }
+
+  get tuning(): { register: Register; root: Root } {
+    return { register: this.register, root: this.root };
+  }
+
+  get band(): number | null {
+    return this.lastBand;
+  }
+
+  get lastFreq(): number {
+    return this.lastFreqHz;
+  }
+
+  /** The most recent events, oldest first. Capped — this is a machine's status
+   *  log, not a console. */
+  events(): EngineEvent[] {
+    return this.log;
+  }
+
+  private note(kind: EngineEvent["kind"], band: number | null, note = ""): void {
+    this.log.push({ at: this.uptimeS, band, kind, note });
+    if (this.log.length > LOG_MAX) this.log.shift();
+  }
+
+  /** Metered output level, 0..1, on the law fitted to measured bus RMS. One
+   *  number so the CARRIER needle and the DATA readout can never disagree. */
+  level01(): number {
+    return Math.min(1, (this.rms() / 0.3) ** 0.75);
+  }
+
+  /** New strikes take the new tuning; voices already ringing keep the pitch
+   *  they were struck at, because retuning a sounding Rhodes voice sounds like
+   *  a fault rather than a feature. */
+  setRegister(register: Register): void {
+    if (register === this.register) return;
+    this.register = register;
+    this.note("CAL", null, `REG ${register}`);
+  }
+
+  setRoot(root: Root): void {
+    if (root === this.root) return;
+    this.root = root;
+    this.note("CAL", null, `ROOT ${root}`);
   }
 
   /** Browsers will not let audio start without a gesture, so every entry point
@@ -363,7 +442,7 @@ export class Engine {
     const ch = clamp(Math.round(channel), 0, CHANNEL_COUNT - 1);
     const y = clamp(y01, 0, 1);
     const t0 = ctx.currentTime;
-    const freq = channelFreq(ch);
+    const freq = channelFreq(ch, this.register, this.root);
 
     // A re-strike on a channel this same input is already holding damps the old
     // note first, the way a piano damper drops before the hammer returns.
@@ -479,6 +558,9 @@ export class Engine {
     };
     this.nextId += 1;
     this.live.push(voice);
+    this.lastBand = ch;
+    this.lastFreqHz = freq;
+    this.note("STRIKE", ch);
 
     // A voice left untouched still has to stop: schedule the natural end so a
     // note nobody releases cannot leak an oscillator.
@@ -501,6 +583,7 @@ export class Engine {
   release(id: number): void {
     const v = this.live.find((x) => x.id === id);
     if (v === undefined || v.releasedAt !== null) return;
+    this.note("RELEASE", v.channel);
     if (this.pedal) {
       // Sustain pedal down: lift the damper and let the body ring out on its
       // own decay instead.
@@ -518,6 +601,7 @@ export class Engine {
   setPedal(down: boolean): void {
     if (down === this.pedal) return;
     this.pedal = down;
+    this.note(down ? "PEDAL DOWN" : "PEDAL UP", null);
     if (down) return;
     for (const v of this.live.slice()) {
       if (v.pedalled) {

@@ -78,31 +78,37 @@ body {
   text-transform: uppercase;
 }
 
-.rig__nav {
+.rig__views {
   display: flex;
   gap: 0.35rem;
 }
 
-.rig__nav a {
-  padding: 0.2rem 0.65rem;
+.view-btn {
+  padding: 0.22rem 0.7rem;
   border: 1px solid var(--line);
   border-radius: 3px;
+  background: transparent;
   color: var(--phos-3);
+  font-family: inherit;
   font-size: 0.68rem;
   letter-spacing: 0.18em;
-  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color 120ms ease-out,
+    background-color 120ms ease-out,
+    border-color 120ms ease-out;
 }
 
-.rig__nav a:hover,
-.rig__nav a:focus-visible {
+.view-btn:hover {
   border-color: var(--phos-3);
   color: var(--phos);
 }
 
-.rig__nav a[aria-current="page"] {
+.view-btn[aria-checked="true"] {
   border-color: var(--phos-3);
-  color: var(--ink-0);
   background: var(--phos-3);
+  color: var(--ink-0);
+  box-shadow: 0 0 10px rgb(87 255 160 / 30%);
 }
 
 .rig__body {
@@ -251,6 +257,197 @@ body {
   letter-spacing: 0.24em;
 }
 
+/* ---- the deeper views --------------------------------------------------- */
+
+/* An inset panel over the field rather than a page in front of it. The pane
+   itself takes no pointer events, so the eight bands underneath stay playable
+   with a pane open; only the calibration controls claim them back. */
+.pane {
+  position: absolute;
+
+  /* Only as tall as it needs to be: a half-empty full-height box reads as a
+     page laid over the instrument, which is the thing section 12 rules out. */
+  inset: 0.5rem auto auto 0.5rem;
+  display: grid;
+  max-height: calc(100% - 1rem);
+  align-content: start;
+  gap: 0.3rem;
+  width: min(19rem, 52%);
+  padding: 0.5rem 0.7rem;
+  overflow: hidden auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgb(3 7 6 / 90%);
+  opacity: 0;
+  transition:
+    opacity 140ms ease-out,
+    transform 140ms ease-out;
+  transform: translateX(-6px);
+  pointer-events: none;
+}
+
+.pane[data-open="true"] {
+  opacity: 1;
+  transform: none;
+}
+
+.pane__title {
+  margin: 0;
+  color: var(--phos);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.26em;
+}
+
+.pane__sub {
+  margin: 0.2rem 0 0;
+  color: var(--phos-3);
+  font-size: 0.55rem;
+  font-weight: 400;
+  letter-spacing: 0.26em;
+}
+
+.sch,
+.map,
+.flow,
+.log {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sch__row,
+.log__row,
+.map__row {
+  padding: 0.05rem 0;
+  border-bottom: 1px solid rgb(87 255 160 / 7%);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+}
+
+.sch__row,
+.log__row {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: space-between;
+}
+
+.sch__label,
+.log__time,
+.map__band {
+  color: var(--phos-3);
+}
+
+.sch__value,
+.log__what,
+.map__key {
+  margin: 0;
+  color: var(--phos);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.map__row {
+  display: grid;
+  grid-template-columns: 2.6rem 1.4rem 1fr;
+}
+
+.map__hz {
+  color: var(--phos-3);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* The signal chain drawn as a chain: every step after the first carries its own
+   arrow, so the diagram reads as structure rather than as a list. */
+.flow {
+  gap: 0;
+  margin-top: 0.2rem;
+}
+
+.flow__step {
+  padding-left: 0.9rem;
+  color: var(--phos-2);
+  font-size: 0.58rem;
+  letter-spacing: 0.14em;
+}
+
+.flow__step + .flow__step {
+  position: relative;
+  margin-top: 0.26rem;
+}
+
+.flow__step + .flow__step::before {
+  position: absolute;
+  margin-left: -0.9rem;
+  color: var(--phos-3);
+  content: "↓";
+}
+
+/* Newest at the bottom, older rows fading upward. `--age` is set per row from
+   its place in the buffer, so the fade is the log's real depth. */
+.log__row {
+  opacity: calc(1 - var(--age, 0) * 0.72);
+}
+
+/* ---- calibration -------------------------------------------------------- */
+
+.cal {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.cal__name {
+  color: var(--phos-3);
+  font-size: 0.55rem;
+  letter-spacing: 0.24em;
+}
+
+.cal__bank {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  pointer-events: auto;
+}
+
+.cal__opt {
+  flex: 1;
+  padding: 0.3rem 0.2rem;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: var(--ink-3);
+  color: var(--phos-3);
+  font-family: inherit;
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+
+.cal__opt:last-child {
+  border-right: 0;
+}
+
+.cal__opt:hover {
+  color: var(--phos-2);
+}
+
+.cal__opt[aria-checked="true"] {
+  background: var(--phos-3);
+  color: var(--ink-0);
+}
+
+.cal__note {
+  margin: 0;
+  color: var(--phos-3);
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  opacity: 0.8;
+}
+
 /* ---- telemetry rail ----------------------------------------------------- */
 
 /* Four rows with the last one elastic, so the gauge can sit at the foot of a
@@ -296,6 +493,17 @@ body {
   color: var(--phos);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.08em;
+}
+
+/* Phosphor glow only on values that actually moved. Set for one frame when a
+   readout changes and cleared on the next, so nothing here pulses on a timer. */
+[data-flash] {
+  transition: text-shadow 260ms ease-out;
+}
+
+[data-flash="on"] {
+  text-shadow: 0 0 9px rgb(87 255 160 / 85%);
+  transition: none;
 }
 
 .vox-bar {
@@ -521,7 +729,7 @@ body {
   border-radius: 4px;
 }
 
-.rocker__bank button {
+.rocker__opt {
   padding: 0.4rem 0.75rem;
   border: 0;
   border-right: 1px solid var(--line);
@@ -533,30 +741,44 @@ body {
   cursor: pointer;
 }
 
-.rocker__bank button:last-child {
+.rocker__opt:last-child {
   border-right: 0;
 }
 
-.rocker__bank button:hover {
+.rocker__opt:hover {
   color: var(--phos-2);
 }
 
-.rocker__bank button[aria-checked="true"] {
+.rocker__opt[aria-checked="true"] {
   background: var(--phos-3);
   color: var(--ink-0);
   box-shadow: inset 0 0 12px rgb(87 255 160 / 45%);
 }
 
-.panel__hint {
+.legend {
+  display: flex;
   flex: 1 1 16rem;
+  flex-wrap: wrap;
+  gap: 0.15rem 1.1rem;
   margin: 0;
-  color: var(--phos-3);
-  font-size: 0.62rem;
-  letter-spacing: 0.06em;
+  padding: 0;
+  list-style: none;
 }
 
-.panel__hint b {
+.legend__item {
+  color: var(--phos-3);
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  opacity: 0.75;
+}
+
+.legend__key {
   color: var(--phos-2);
+  font-weight: 400;
+}
+
+.legend__sep {
+  opacity: 0.45;
 }
 
 /* ---- narrow ------------------------------------------------------------- */
@@ -609,9 +831,19 @@ body {
   }
 }
 
+@media (width <= 820px) {
+  .pane {
+    inset: 0.4rem 0.4rem auto;
+    width: auto;
+    max-height: calc(100% - 0.8rem);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .invite[data-open="false"],
-  .deck[data-keys="used"] .deck__key {
+  .deck[data-keys="used"] .deck__key,
+  .pane,
+  .view-btn {
     transition-duration: 1ms;
   }
 }

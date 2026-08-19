@@ -30,6 +30,19 @@ type Flash = { edge: number; t: number };
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 
+/** Mean absolute second difference: how jagged the signal actually is. A clean
+ *  struck tone is smooth and this stays near zero; hiss and interference push
+ *  it up. Used to drive how unsteady the trace looks, so the instability on
+ *  screen is a measurement rather than a mode-flag animation. */
+function roughness(data: Float32Array): number {
+  if (data.length < 3) return 0;
+  let sum = 0;
+  for (let i = 2; i < data.length; i += 8) {
+    sum += Math.abs(data[i] - 2 * data[i - 1] + data[i - 2]);
+  }
+  return sum / Math.ceil((data.length - 2) / 8);
+}
+
 export class Playfield {
   private ctx: CanvasRenderingContext2D;
   private w = 1;
@@ -249,24 +262,45 @@ export class Playfield {
 
   /** The ringing trace: time-domain samples off the master bus, drawn across the
    *  whole screen. When the instrument is silent this is a flat line, which is
-   *  the honest reading. */
+   *  the honest reading.
+   *
+   *  One trace, not eight — a composite of everything sounding, so a chord
+   *  reads as a more complex single figure rather than as eight fighting ones.
+   *
+   *  Both of its character changes are measured off the signal rather than
+   *  switched on by mode. The ghost is drawn at the chorus's real delay, so it
+   *  appears when there is genuinely a delayed copy in the audio; the tremble
+   *  is scaled by the trace's own roughness, which rises with the hiss RADIO
+   *  actually adds. Neither is a mode flag pretending to be an observation. */
   private drawWaveform(): void {
     const c = this.ctx;
     const data = this.engine.waveform();
     const mid = this.h * 0.5;
     const step = Math.max(1, Math.floor(data.length / this.w));
-    c.strokeStyle = `rgba(${PHOS}, 0.55)`;
-    c.lineWidth = 1.3;
-    c.beginPath();
-    for (let px = 0; px < this.w; px += 1) {
-      const s = data[Math.min(data.length - 1, px * step)] ?? 0;
-      // A quarter of the height, not near-half: the master trace is one voice
-      // in the picture, not the picture.
-      const y = mid - s * this.h * 0.26;
-      if (px === 0) c.moveTo(px, y);
-      else c.lineTo(px, y);
+    const rough = roughness(data);
+    const tremble = Math.min(2.2, rough * 260) * this.h * 0.004;
+
+    const trace = (offset: number, alpha: number, jitter: number): void => {
+      c.strokeStyle = `rgba(${PHOS}, ${alpha})`;
+      c.lineWidth = 1.3;
+      c.beginPath();
+      for (let px = 0; px < this.w; px += 1) {
+        const i = Math.min(data.length - 1, Math.max(0, px * step + offset));
+        // A quarter of the height, not near-half: the master trace is one voice
+        // in the picture, not the picture.
+        const y = mid - (data[i] ?? 0) * this.h * 0.26 + Math.sin(px * 0.7 + this.frame * 0.3) * jitter;
+        if (px === 0) c.moveTo(px, y);
+        else c.lineTo(px, y);
+      }
+      c.stroke();
+    };
+
+    // The chorus taps sit at 11 and 17 ms; the ghost is drawn at the first of
+    // them, so what is on screen is the copy that is genuinely in the air.
+    if (this.engine.scanMode === "CHOR") {
+      trace(Math.round(0.011 * 48000), 0.2, tremble);
     }
-    c.stroke();
+    trace(0, 0.55, tremble);
   }
 
   private drawPointer(): void {

@@ -12,14 +12,19 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="rig">
+    <div class="rig" id="rig" data-view="PLAY">
       <header class="rig__head">
         <h1 class="rig__name">VOX-8 <b>phosphor synthesis deck</b></h1>
+
+        <!-- Views onto one machine, so this is a mode selector rather than a set
+             of links: the same radiogroup the SCAN MODE rocker already uses. -->
         <nav class="rig__nav" aria-label="Primary">
-          <a href="#playfield" aria-current="page">PLAY</a>
-          <a href="#deck">DECK</a>
-          <a href="#rail">DATA</a>
-          <a href="#panel">TUNE</a>
+          <div class="rig__views" id="views" role="radiogroup" aria-label="View">
+            <button class="view-btn" type="button" role="radio" data-view="PLAY" aria-checked="true">PLAY</button>
+            <button class="view-btn" type="button" role="radio" data-view="DECK" aria-checked="false" tabindex="-1">DECK</button>
+            <button class="view-btn" type="button" role="radio" data-view="DATA" aria-checked="false" tabindex="-1">DATA</button>
+            <button class="view-btn" type="button" role="radio" data-view="TUNE" aria-checked="false" tabindex="-1">TUNE</button>
+          </div>
         </nav>
       </header>
 
@@ -51,6 +56,73 @@
                 </p>
                 <p class="invite__sub">or press <b>A S D F G H J K</b> &middot; there are no wrong notes</p>
               </div>
+
+              <!-- The three deeper views. Each is an inset panel over a field
+                   that stays visible and stays playable: the pane passes pointer
+                   events through to the canvas, and only TUNE takes them back. -->
+              <section class="pane" id="pane-deck" data-pane="DECK" data-open="false" aria-label="Signal deck" inert>
+                <h2 class="pane__title">VOX-8 SIGNAL DECK</h2>
+                <dl class="sch">
+                  <div class="sch__row"><dt class="sch__label">BAND ARRAY</dt><dd class="sch__value">08</dd></div>
+                  <div class="sch__row"><dt class="sch__label">VOICE ENGINE</dt><dd class="sch__value">STRUCK TINE</dd></div>
+                  <div class="sch__row"><dt class="sch__label">POLYPHONY</dt><dd class="sch__value">12 VOX</dd></div>
+                  <div class="sch__row"><dt class="sch__label">PEDAL</dt><dd class="sch__value">SPACE</dd></div>
+                  <div class="sch__row"><dt class="sch__label">INPUT A</dt><dd class="sch__value">POINTER</dd></div>
+                  <div class="sch__row"><dt class="sch__label">INPUT B</dt><dd class="sch__value">KEY ARRAY</dd></div>
+                </dl>
+                <ul class="map" id="deck-map"></ul>
+                <ol class="flow" aria-label="Signal flow">
+                  <li class="flow__step">INPUT</li>
+                  <li class="flow__step">BAND SELECT</li>
+                  <li class="flow__step">TINE / BODY</li>
+                  <li class="flow__step">TONE</li>
+                  <li class="flow__step">DECAY</li>
+                  <li class="flow__step">SPACE</li>
+                  <li class="flow__step">MASTER</li>
+                </ol>
+              </section>
+
+              <section class="pane" id="pane-data" data-pane="DATA" data-open="false" aria-label="Telemetry" inert>
+                <h2 class="pane__title">LIVE TELEMETRY</h2>
+                <dl class="sch">
+                  <div class="sch__row"><dt class="sch__label">PEAK</dt><dd class="sch__value" id="tm-peak">0.00</dd></div>
+                  <div class="sch__row"><dt class="sch__label">PEDAL</dt><dd class="sch__value" id="tm-pedalstate">OPEN</dd></div>
+                  <div class="sch__row"><dt class="sch__label">FREQ</dt><dd class="sch__value" id="tm-freq">------</dd></div>
+                  <div class="sch__row"><dt class="sch__label">REGISTER</dt><dd class="sch__value" id="tm-register">MID</dd></div>
+                  <div class="sch__row"><dt class="sch__label">CAL</dt><dd class="sch__value" id="tm-cal">C PENTA</dd></div>
+                </dl>
+                <h3 class="pane__sub">EVENT LOG</h3>
+                <ul class="log" id="tm-log"></ul>
+              </section>
+
+              <section class="pane" id="pane-tune" data-pane="TUNE" data-open="false" aria-label="Calibration" inert>
+                <h2 class="pane__title">CALIBRATION</h2>
+
+                <div class="cal">
+                  <span class="cal__name">REGISTER</span>
+                  <div class="cal__bank" id="cal-register" role="radiogroup" aria-label="Register">
+                    <button class="cal__opt" type="button" role="radio" data-opt="LOW" aria-checked="false" tabindex="-1">LOW</button>
+                    <button class="cal__opt" type="button" role="radio" data-opt="MID" aria-checked="true">MID</button>
+                    <button class="cal__opt" type="button" role="radio" data-opt="HIGH" aria-checked="false" tabindex="-1">HIGH</button>
+                  </div>
+                </div>
+
+                <div class="cal">
+                  <span class="cal__name">ROOT</span>
+                  <div class="cal__bank" id="cal-root" role="radiogroup" aria-label="Root">
+                    <button class="cal__opt" type="button" role="radio" data-opt="C" aria-checked="true">C</button>
+                    <button class="cal__opt" type="button" role="radio" data-opt="D" aria-checked="false" tabindex="-1">D</button>
+                    <button class="cal__opt" type="button" role="radio" data-opt="F" aria-checked="false" tabindex="-1">F</button>
+                    <button class="cal__opt" type="button" role="radio" data-opt="G" aria-checked="false" tabindex="-1">G</button>
+                    <button class="cal__opt" type="button" role="radio" data-opt="A" aria-checked="false" tabindex="-1">A</button>
+                  </div>
+                </div>
+
+                <dl class="sch">
+                  <div class="sch__row"><dt class="sch__label">SCALE</dt><dd class="sch__value">PENTA &middot; LOCKED</dd></div>
+                </dl>
+                <p class="cal__note">ringing voices hold their pitch &middot; new strikes take the new tuning</p>
+              </section>
             </div>
 
             <div class="deck" id="deck" data-keys="idle" aria-hidden="true">
@@ -64,15 +136,15 @@
               <span class="deck__cell"><b class="deck__num">08</b><i class="deck__key">K</i></span>
             </div>
 
-            <aside class="rail" id="rail" aria-label="Telemetry">
+            <aside class="rail" id="rail" aria-label="Readouts">
               <h2 class="rail__title">DATA</h2>
               <dl class="rail__list">
-                <div class="rail__row"><dt>MODE</dt><dd id="tm-mode">NORM</dd></div>
-                <div class="rail__row"><dt>TONE</dt><dd id="tm-tone">050</dd></div>
-                <div class="rail__row"><dt>DECAY</dt><dd id="tm-decay">055</dd></div>
-                <div class="rail__row"><dt>SPACE</dt><dd id="tm-space">028</dd></div>
-                <div class="rail__row"><dt>BAND</dt><dd id="tm-band">--</dd></div>
-                <div class="rail__row"><dt>VOX</dt><dd id="tm-vox">00/12</dd></div>
+                <div class="rail__row"><dt>MODE</dt><dd class="sch__value" id="tm-mode">NORM</dd></div>
+                <div class="rail__row"><dt>TONE</dt><dd class="sch__value" id="tm-tone">050</dd></div>
+                <div class="rail__row"><dt>DECAY</dt><dd class="sch__value" id="tm-decay">055</dd></div>
+                <div class="rail__row"><dt>SPACE</dt><dd class="sch__value" id="tm-space">028</dd></div>
+                <div class="rail__row"><dt>BAND</dt><dd class="sch__value" id="tm-band">--</dd></div>
+                <div class="rail__row"><dt>VOX</dt><dd class="sch__value" id="tm-vox">00/12</dd></div>
               </dl>
               <div class="vox-bar" id="tm-voxbar" aria-hidden="true"><i class="vox-bar__fill"></i></div>
 
@@ -88,7 +160,6 @@
               </div>
             </aside>
           </div>
-
         </section>
 
         <section class="panel" id="panel" aria-label="Controls">
@@ -113,16 +184,17 @@
           <div class="rocker" id="rocker" role="radiogroup" aria-label="Scan mode" data-mode="NORM">
             <span class="rocker__name">SCAN MODE</span>
             <div class="rocker__bank">
-              <button type="button" role="radio" data-mode="NORM" aria-checked="true">NORM</button>
-              <button type="button" role="radio" data-mode="CHOR" aria-checked="false">CHOR</button>
-              <button type="button" role="radio" data-mode="RADIO" aria-checked="false">RADIO</button>
+              <button class="rocker__opt" type="button" role="radio" data-mode="NORM" aria-checked="true">NORM</button>
+              <button class="rocker__opt" type="button" role="radio" data-mode="CHOR" aria-checked="false" tabindex="-1">CHOR</button>
+              <button class="rocker__opt" type="button" role="radio" data-mode="RADIO" aria-checked="false" tabindex="-1">RADIO</button>
             </div>
           </div>
 
-          <p class="panel__hint">
-            drag or scroll a dial &middot; <b>SPACE</b> holds the sustain pedal &middot; nothing here can be
-            set to a setting that stops it playing
-          </p>
+          <ul class="legend">
+            <li class="legend__item"><b class="legend__key">A S D F G H J K</b> <span class="legend__sep">//</span> STRIKE</li>
+            <li class="legend__item"><b class="legend__key">SPACE</b> <span class="legend__sep">//</span> SUSTAIN</li>
+            <li class="legend__item"><b class="legend__key">DIAL</b> <span class="legend__sep">//</span> DRAG &middot; SCROLL</li>
+          </ul>
         </section>
       </main>
     </div>

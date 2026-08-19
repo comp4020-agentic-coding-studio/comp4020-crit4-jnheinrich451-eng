@@ -7,9 +7,10 @@
 // axis and excites its band from the inside instead.
 
 import { Engine } from "./src/engine";
-import type { Knob, ScanMode } from "./src/engine";
+import type { Knob, Register, Root, ScanMode } from "./src/engine";
 import { Playfield } from "./src/playfield";
-import { Deck, KEYS, KnobControl, Rocker, Telemetry } from "./src/chrome";
+import type { View } from "./src/chrome";
+import { Deck, KEYS, KnobControl, Rocker, Segmented, Telemetry, Views } from "./src/chrome";
 
 const el = <T extends HTMLElement>(id: string): T => {
   const node = document.getElementById(id);
@@ -37,9 +38,41 @@ const telemetry = new Telemetry(
     uptime: el("uptime"),
     power: el("tag-power"),
     pedal: el("tag-pedal"),
+    peak: el("tm-peak"),
+    pedalState: el("tm-pedalstate"),
+    freq: el("tm-freq"),
+    register: el("tm-register"),
+    cal: el("tm-cal"),
+    log: el("tm-log"),
+    deckMap: el("deck-map"),
   },
   engine,
 );
+
+// --- Views ------------------------------------------------------------------
+
+// PLAY / DECK / DATA / TUNE are ways of looking at one machine. Switching
+// touches no audio state at all — no engine call in this handler, by design.
+new Views(
+  el("rig"),
+  [...el("views").querySelectorAll<HTMLButtonElement>("[data-view]")],
+  [el("pane-deck"), el("pane-data"), el("pane-tune")],
+  (view: View) => {
+    // Keep the field reachable: leaving a pane should not strand focus on a
+    // control that has just gone inert.
+    if (view === "PLAY") canvas.focus({ preventScroll: true });
+  },
+);
+
+new Segmented<Register>(el("cal-register"), engine.tuning.register, (r) => {
+  void engine.start();
+  engine.setRegister(r);
+});
+
+new Segmented<Root>(el("cal-root"), engine.tuning.root, (r) => {
+  void engine.start();
+  engine.setRoot(r);
+});
 
 // --- Controls ---------------------------------------------------------------
 
@@ -66,7 +99,6 @@ new Rocker(el("rocker"), (mode: ScanMode) => {
 function strike(channel: number, y01: number, source: "pointer" | "key"): number {
   void engine.start();
   invite.dataset.open = "false";
-  telemetry.noteBand(channel);
   playfield.impact(channel, y01, source, 0.35 + y01 * 0.65);
   return engine.strike(channel, y01, source);
 }
@@ -132,9 +164,9 @@ window.addEventListener("keydown", (e: KeyboardEvent) => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
 
   if (e.key === " " || e.code === "Space") {
-    // A focused button owns the spacebar as its activation key; everywhere else
-    // it is the sustain pedal.
-    if (document.activeElement instanceof HTMLButtonElement) return;
+    // The pedal, always — including while a button holds focus. The spec asks
+    // for SPACE to work globally, and a sustain pedal that stops working
+    // because you last touched a dial is not a pedal. Buttons keep Enter.
     e.preventDefault();
     engine.setPedal(true);
     void engine.start();

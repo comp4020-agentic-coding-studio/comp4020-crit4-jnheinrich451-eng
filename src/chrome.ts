@@ -6,8 +6,10 @@
 // riding the bus RMS. If the instrument is silent the needle sits at zero,
 // because that is what the bus is doing.
 
-import type { Engine, ScanMode } from "./engine";
-import { CHANNEL_COUNT, MAX_VOICES } from "./engine";
+import type { Engine, EngineEvent, ScanMode } from "./engine";
+import { CHANNEL_COUNT, MAX_VOICES, channelFreq } from "./engine";
+
+export type View = "PLAY" | "DECK" | "DATA" | "TUNE";
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
@@ -148,6 +150,115 @@ export class Rocker {
   }
 }
 
+/** PLAY / DECK / DATA / TUNE.
+ *
+ *  These are views onto one machine, not pages. Nothing here touches the
+ *  engine: switching cannot stop audio, drop voices or clear the pedal,
+ *  because the only thing it changes is which overlay is drawn over a
+ *  playfield that never goes away. */
+export class Views {
+  private view: View = "PLAY";
+
+  constructor(
+    private root: HTMLElement,
+    private tabs: HTMLButtonElement[],
+    private panes: HTMLElement[],
+    private onChange: (v: View) => void,
+  ) {
+    for (const tab of tabs) {
+      tab.addEventListener("click", () => {
+        this.set(tab.dataset.view as View);
+      });
+      tab.addEventListener("keydown", (e: KeyboardEvent) => {
+        const dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+        if (dir === 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const next = tabs[(tabs.indexOf(tab) + dir + tabs.length) % tabs.length];
+        next.focus();
+        this.set(next.dataset.view as View);
+      });
+    }
+    this.render();
+  }
+
+  set(view: View): void {
+    if (view === this.view) return;
+    this.view = view;
+    this.render();
+    this.onChange(view);
+  }
+
+  get(): View {
+    return this.view;
+  }
+
+  private render(): void {
+    this.root.dataset.view = this.view;
+    for (const tab of this.tabs) {
+      const on = tab.dataset.view === this.view;
+      // aria-CHECKED, not aria-selected: these are role="radio", and the state
+      // the stylesheet reads has to be the state the role actually defines.
+      // Written the other way the view changed and the lit tab did not.
+      tab.setAttribute("aria-checked", String(on));
+      tab.tabIndex = on ? 0 : -1;
+    }
+    for (const pane of this.panes) {
+      const on = pane.dataset.pane === this.view;
+      pane.dataset.open = String(on);
+      // `inert` keeps a closed pane out of the tab order and the a11y tree
+      // while leaving it in the DOM for the fade.
+      pane.toggleAttribute("inert", !on);
+    }
+  }
+}
+
+/** REGISTER and ROOT. A segmented readout rather than a control panel: TUNE is
+ *  calibration, and there is deliberately nothing here that can make the
+ *  instrument sound bad. */
+export class Segmented<T extends string> {
+  private value: T;
+
+  constructor(
+    private root: HTMLElement,
+    initial: T,
+    private onChange: (v: T) => void,
+  ) {
+    this.value = initial;
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>("[data-opt]")];
+    for (const btn of buttons) {
+      btn.addEventListener("click", () => {
+        this.set(btn.dataset.opt as T);
+      });
+      btn.addEventListener("keydown", (e: KeyboardEvent) => {
+        const dir = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+        if (dir === 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const next = buttons[(buttons.indexOf(btn) + dir + buttons.length) % buttons.length];
+        next.focus();
+        this.set(next.dataset.opt as T);
+      });
+    }
+    this.render();
+  }
+
+  set(v: T): void {
+    if (v === this.value) return;
+    this.value = v;
+    this.render();
+    this.onChange(v);
+  }
+
+  private render(): void {
+    for (const btn of this.root.querySelectorAll<HTMLButtonElement>("[data-opt]")) {
+      const on = btn.dataset.opt === this.value;
+      btn.setAttribute("aria-checked", String(on));
+      btn.tabIndex = on ? 0 : -1;
+    }
+  }
+}
+
 /** The deck: eight lit markers under the screen. Each carries its channel number
  *  and the key that strikes it — faint until the player uses the keyboard, at
  *  which point the letters are worth reading and brighten to say so. */
@@ -185,54 +296,136 @@ type Fields = {
   uptime: HTMLElement;
   power: HTMLElement;
   pedal: HTMLElement;
+  peak: HTMLElement;
+  pedalState: HTMLElement;
+  freq: HTMLElement;
+  register: HTMLElement;
+  cal: HTMLElement;
+  log: HTMLElement;
+  deckMap: HTMLElement;
 };
 
+/** Meter ballistics. Fast to rise and slow to fall, like a moving-coil meter
+ *  with a real spring behind it — a symmetric filter reads as a graph. */
+const RISE = 0.34;
+const FALL = 0.06;
+
 export class Telemetry {
-  private lastBand = "--";
-  /** Smoothed so the needle swings like a moving-coil meter rather than
-   *  snapping frame to frame. The value it chases is still the real RMS. */
   private needleValue = 0;
+  private shown = new Map<HTMLElement, string>();
+  private logLen = -1;
 
   constructor(
     private fields: Fields,
     private engine: Engine,
   ) {}
 
-  noteBand(channel: number): void {
-    this.lastBand = String(channel + 1).padStart(2, "0");
+  /** Write a value and flash the field if it actually changed. The flash is the
+   *  only animation on the rail, and it is driven by a value moving — nothing
+   *  here pulses on a timer. */
+  private put(el: HTMLElement, text: string): void {
+    if (this.shown.get(el) === text) return;
+    this.shown.set(el, text);
+    el.textContent = text;
+    el.dataset.flash = "on";
+    // Restart the animation rather than waiting for it: values can change
+    // faster than the flash lasts.
+    void el.offsetWidth;
+    requestAnimationFrame(() => {
+      el.dataset.flash = "off";
+    });
   }
 
   update(): void {
     const f = this.fields;
     const e = this.engine;
 
-    f.mode.textContent = e.scanMode;
-    f.tone.textContent = pct(e.knob("tone"));
-    f.decay.textContent = pct(e.knob("decay"));
-    f.space.textContent = pct(e.knob("space"));
-    f.band.textContent = this.lastBand;
+    this.put(f.mode, e.scanMode);
+    this.put(f.tone, pct(e.knob("tone")));
+    this.put(f.decay, pct(e.knob("decay")));
+    this.put(f.space, pct(e.knob("space")));
+    this.put(f.band, e.band === null ? "--" : bandName(e.band));
 
     const vox = e.activeCount;
-    f.vox.textContent = `${String(vox).padStart(2, "0")}/${MAX_VOICES}`;
+    this.put(f.vox, `${String(vox).padStart(2, "0")}/${MAX_VOICES}`);
     f.voxBar.style.setProperty("--fill", (vox / MAX_VOICES).toFixed(3));
 
-    // Fitted to measured bus RMS, not guessed: the Rhodes voice peaks at 0.155
-    // where the old one peaked near 0.95, so the previous law parked a single
-    // note near mid-scale and never got past 0.69 on a full chord. Measured
-    // 0.099 RMS for one note and 0.223 for eight; this law puts those at 43%
-    // and 80%, leaving travel at both ends.
-    const rms = e.rms();
-    this.needleValue += (Math.min(1, (rms / 0.3) ** 0.75) - this.needleValue) * 0.18;
+    const level = e.level01();
+    this.needleValue += (level - this.needleValue) * (level > this.needleValue ? RISE : FALL);
     f.needle.style.setProperty("--swing", `${(this.needleValue - 0.5) * 96}deg`);
-    // "Lock" is an honest threshold on the bus, not a prop: the needle has to be
-    // reading something for the device to claim it.
-    f.lock.dataset.locked = String(this.needleValue > 0.08);
-    f.lock.textContent = this.needleValue > 0.08 ? "LOCK" : "SCAN";
+    const locked = this.needleValue > 0.08;
+    f.lock.dataset.locked = String(locked);
+    this.put(f.lock, locked ? "LOCK" : "SCAN");
 
-    f.uptime.textContent = hhmmss(e.uptimeS);
+    this.put(f.peak, this.needleValue.toFixed(2));
+    this.put(f.pedalState, e.pedalDown ? "HOLD" : "OPEN");
+    this.put(f.freq, e.lastFreq === 0 ? "------" : e.lastFreq.toFixed(2));
+
+    const { register, root } = e.tuning;
+    this.put(f.register, register);
+    this.put(f.cal, `${root} PENTA`);
+
+    this.put(f.uptime, hhmmss(e.uptimeS));
     f.power.dataset.on = String(e.running);
     f.pedal.dataset.on = String(e.pedalDown);
+
+    this.renderLog(e.events());
+    this.renderDeckMap();
   }
+
+  /** Rebuild only when the log actually grew. Repainting ten rows every frame
+   *  would restart every entry's fade sixty times a second. */
+  private renderLog(events: EngineEvent[]): void {
+    const stamp = events.length === 0 ? -1 : events.length * 1e6 + Math.round(events[events.length - 1].at * 100);
+    if (stamp === this.logLen) return;
+    this.logLen = stamp;
+    this.fields.log.replaceChildren(
+      ...events.map((ev, i) => {
+        const row = document.createElement("li");
+        row.className = "log__row";
+        // Oldest fade out at the top; the newest is full strength.
+        row.style.setProperty("--age", ((events.length - 1 - i) / Math.max(1, events.length - 1)).toFixed(3));
+        const t = document.createElement("span");
+        t.className = "log__time";
+        t.textContent = `T+${hhmmss(ev.at)}`;
+        const what = document.createElement("b");
+        what.className = "log__what";
+        what.textContent = ev.band === null ? `${ev.kind} ${ev.note}`.trim() : `${bandName(ev.band)} ${ev.kind}`;
+        row.append(t, what);
+        return row;
+      }),
+    );
+  }
+
+  /** The DECK key map carries live pitches, so the schematic retunes with the
+   *  instrument instead of describing a machine that no longer exists. */
+  private renderDeckMap(): void {
+    const { register, root } = this.engine.tuning;
+    const key = `${register}${root}`;
+    if (this.shown.get(this.fields.deckMap) === key) return;
+    this.shown.set(this.fields.deckMap, key);
+    this.fields.deckMap.replaceChildren(
+      ...Array.from({ length: CHANNEL_COUNT }, (_, i) => {
+        const row = document.createElement("li");
+        row.className = "map__row";
+        const b = document.createElement("span");
+        b.className = "map__band";
+        b.textContent = bandName(i);
+        const k = document.createElement("b");
+        k.className = "map__key";
+        k.textContent = KEYS[i].toUpperCase();
+        const hz = document.createElement("i");
+        hz.className = "map__hz";
+        hz.textContent = `${channelFreq(i, register, root).toFixed(1)} HZ`;
+        row.append(b, k, hz);
+        return row;
+      }),
+    );
+  }
+}
+
+function bandName(channel: number): string {
+  return `B${String(channel + 1).padStart(2, "0")}`;
 }
 
 function pct(v: number): string {
