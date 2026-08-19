@@ -27,9 +27,15 @@ body {
   height: 100%;
 }
 
+/* The device fills the window and the playfield takes whatever is left over,
+   so the field grows with the screen instead of sitting in a fixed box with
+   dead space around it. `dvh` rather than `vh`: on a phone `vh` counts the
+   browser chrome that is not actually there. */
 body {
+  display: flex;
+  min-height: 100dvh;
   margin: 0;
-  padding: clamp(0.5rem, 2vw, 1.5rem);
+  padding: clamp(0.35rem, 1.2vw, 0.9rem);
   background: var(--ink-0);
   color: var(--phos-2);
   font-family: var(--mono);
@@ -41,9 +47,11 @@ body {
 /* ---- casing ------------------------------------------------------------- */
 
 .rig {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: clamp(0.6rem, 1.6vw, 1.1rem);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: clamp(0.5rem, 1.2vw, 1rem);
   border: 1px solid var(--line);
   border-radius: 18px;
   background: var(--ink-1);
@@ -111,14 +119,21 @@ body {
   box-shadow: 0 0 10px rgb(87 255 160 / 30%);
 }
 
+/* The screen takes the free height; the control panel keeps its own. */
 .rig__body {
   display: grid;
-  gap: 0.75rem;
+  flex: 1;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0.7rem;
+  min-height: 0;
 }
 
 /* ---- screen ------------------------------------------------------------- */
 
 .screen {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
   padding: 0.7rem;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -183,15 +198,19 @@ body {
 .screen__stage {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 158px;
-  grid-template-rows: auto auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 0.7rem;
+  min-height: 0;
 }
 
 .stage__glass {
   position: relative;
   grid-column: 1;
   grid-row: 1;
-  height: clamp(280px, 50vh, 460px);
+
+  /* No fixed height any more: the row is 1fr, so the glass is however much
+     screen is going spare. The floor stops it collapsing on a short window. */
+  min-height: 200px;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -545,10 +564,16 @@ body {
   text-shadow: 0 0 8px rgb(87 255 160 / 60%);
 }
 
+/* The dial scales with the room the rail has. Everything inside is derived
+   from --dial, so the needle and the ticks keep their proportions instead of
+   the needle staying 34px in a 130px face. At the floor these resolve to the
+   same numbers the fixed layout used. */
 .gauge__face {
+  --dial: clamp(54px, 13vh, 132px);
+
   position: relative;
   width: 100%;
-  height: 54px;
+  height: var(--dial);
   margin: 0.3rem 0;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -561,9 +586,9 @@ body {
   bottom: 8px;
   left: calc(50% - 0.5px);
   width: 1px;
-  height: 7px;
+  height: calc(var(--dial) * 0.13);
   background: var(--phos-3);
-  transform: rotate(var(--tick, 0deg)) translateY(-30px);
+  transform: rotate(var(--tick, 0deg)) translateY(calc(var(--dial) * -0.55));
   transform-origin: bottom center;
 }
 
@@ -584,7 +609,7 @@ body {
   bottom: 8px;
   left: calc(50% - 0.5px);
   width: 1px;
-  height: 34px;
+  height: calc(var(--dial) * 0.63);
   background: var(--phos);
   box-shadow: 0 0 7px rgb(87 255 160 / 70%);
   transform: rotate(var(--swing, -48deg));
@@ -783,13 +808,23 @@ body {
 
 /* ---- narrow ------------------------------------------------------------- */
 
-@media (width <= 820px) {
+@media (width <= 720px) {
   /* One column: glass, then deck, then rail, in source order. The explicit
      desktop placement has to be handed back or the three of them fight over
      two tracks that no longer exist. */
   .screen__stage {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: none;
+  }
+
+  /* Stacked, the three blocks are taller than a phone. Let the page flow and
+     scroll rather than squeezing the field down to nothing to force a fit. */
+  .rig__body {
+    grid-template-rows: auto auto;
+  }
+
+  .stage__glass {
+    height: clamp(260px, 46vh, 420px);
   }
 
   .stage__glass,
@@ -831,7 +866,7 @@ body {
   }
 }
 
-@media (width <= 820px) {
+@media (width <= 720px) {
   .pane {
     inset: 0.4rem 0.4rem auto;
     width: auto;
