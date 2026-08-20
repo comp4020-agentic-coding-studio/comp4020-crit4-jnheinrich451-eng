@@ -100,8 +100,14 @@ Pointer (drag = sustained, position = timbre) and keyboard (A S D F G H J K = ch
 - The minifier picks its own quote character. A spec test that greps the bundle
   must strip quotes and whitespace before matching, or it fails on a build that
   is perfectly correct.
-- `.stylelintrc.json` carries a widened `selector-class-pattern`: the standard
-  config's kebab-case rule rejects BEM's `block__element`.
+- There is no linter any more: the starter refresh dropped oxlint and stylelint
+  from `check`, from the dependencies and as config files. Two conventions they
+  used to enforce are worth holding to by hand, because both caught real faults
+  here — style every element through a class rather than a bare descendant
+  selector (`.map__key`, not `.map li b`), which is what stylelint's
+  `no-descending-specificity` was really policing, and keep class names BEM.
+  The preamble above invites wiring a sensor back into `check`; that is the one
+  worth re-adding first.
 - Vite copies `public/` only. `assests/` is reference material and stays out of
   `dist/` — keep it that way; nothing on the page should link to it.
 - `engine.start()` does its graph building synchronously before it awaits the
