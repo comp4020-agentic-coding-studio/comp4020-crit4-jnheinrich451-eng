@@ -1,85 +1,33 @@
 # Process overview
 
-<!-- TEMPLATE: this file is a shape to fill in, not a form. Replace everything
-     in it with your own overview, and delete this comment — `pnpm
-     check:evidence` will remind you if it's still here. -->
+VOX-8, an eight-channel struck-tine instrument. Everything is synthesised at
+play time; the playfield draws nothing an audio event did not cause; Y position
+carries the whole expressive range, soft and long at the bottom, bright and fast
+at the top. The tuning is pentatonic, so "no wrong notes" is a property of the
+instrument rather than a promise in the copy. Fuller ledger:
+[PROCESS_RECORD.md](PROCESS_RECORD.md).
 
-A reading-guide to how the work came together --- a map to your process, not an
-essay about it. Markers read this file and follow its citations; they don't
-trawl the repo for evidence you didn't point at, so if a moment mattered, cite
-it.
+## Twelve-voice polyphony was a comment, not a mechanism
 
-This file is the shape; the course site's
-[assessment page](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#what-you-submit)
-is the requirement, and its
-[word counts](https://comp.anu.edu.au/courses/comp4020-agentic-coding-studio/topics/assessment/#word-counts)
-cover every deliverable.
+`VOX` read `20/12` on a fast drag, past `60/12` if you dragged hard. The obvious
+fix was the one I was offered — raise the readout to 80. Instead the cap turned
+out never to have existed: culling only *scheduled* a voice to stop, and it sat
+in the list for the ~250 ms until its oscillator reported back, far longer than
+a drag takes to strike again. Culling is synchronous now, and how many to cull
+comes from a pure `voicesToCull()` a test can assert. I clamped the meter bar
+but deliberately not the number, so a regression stays visible rather than
+silent. A pass that never reproduces a bug proves nothing, so I stashed
+`src/engine.ts` alone and replayed the input against the old code — `15/12`,
+against `12/12` with the fix
+([`b083a01`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit4-jnheinrich451-eng/commit/b083a01)).
 
-## What I built
+## A deliberately random instrument defeats a single measurement
 
-One paragraph: the thing, and the idea behind it.
-
-## The moments that mattered
-
-Three or four for an assignment; fewer is fine for a weekly prototype. Keep the
-list short so each moment has room to do all four jobs:
-
-1. **what happened** --- the problem, or the thing that went wrong
-2. **what you did instead of the obvious thing** --- the call you made, and why
-   it beat the obvious one
-3. **how you knew it was right** --- the check you ran, the viewport you looked
-   at, what you read before accepting the diff
-4. **the citation** --- a commit or commit range, a `CLAUDE.md` change, a check
-   that went from red to green, a prompt paired with the commit it produced
-
-Jobs 2 and 3 are the ones the repo can't tell a reader on its own, so they're
-where the marks are. The strongest moments are the ones where a correction
-landed in the **harness** --- the standards and checks your work has to satisfy
---- rather than in a retry: a rule added to `CLAUDE.md`, a check wired up, an
-attempt thrown away. Retrying until it passes is the routine case, and changing
-what the work runs against is the skilled one.
-
-Cite each moment as a link whose text is the commit hash or range and whose
-target is this repo's commit or compare URL, so a reader clicks straight to the
-evidence:
-
-- one commit: [`a1b2c3d`](https://github.com/YOUR-ORG/YOUR-REPO/commit/a1b2c3d)
-- a range:
-  [`a1b2c3d...e4f5a6b`](https://github.com/YOUR-ORG/YOUR-REPO/compare/a1b2c3d...e4f5a6b)
-
-To pair a prompt with the commit it produced, quote the prompt (curated, not a
-full transcript) next to the citation:
-
-> the prompt, verbatim
-
-Screenshots are welcome where one carries the verification better than a
-sentence does. Commit the file to this repo and link it with a **relative**
-path, which is what makes it render on GitHub: `![alt text](docs/before.png)`.
-Images don't count towards the word count and don't replace the citation.
-
-### A worked moment, for shape
-
-Delete this section along with the rest of the boilerplate --- it's here to show
-the four jobs in one paragraph, not to be imitated in content.
-
-> The date formatter kept coming back with `toLocaleDateString()` and no locale
-> argument, so the same build rendered differently on my machine and in CI. I'd
-> already re-prompted it twice, which fixed the line but not the habit, so the
-> third time I put the rule in `CLAUDE.md` instead
-> ([`3f9ac21`](https://github.com/YOUR-ORG/YOUR-REPO/commit/3f9ac21)) and added
-> a spec test that fails on a bare `toLocaleDateString`. That's what told me it
-> had actually taken: the test went red against the old code and green against
-> the new, and the next two features it wrote passed it without prompting
-> ([`3f9ac21...b7e0d14`](https://github.com/YOUR-ORG/YOUR-REPO/compare/3f9ac21...b7e0d14)).
-
-## Before you ship
-
-`pnpm check:evidence` verifies your citations resolve to real commits, that the
-current reflection entry is in `reflections/`, and that your `CLAUDE.md` is
-there --- before a marker ever opens the file. It checks that your map is
-traceable, not that it is good: the marker judges whether your small,
-deliberately chosen set of moments shows real judgement and reflection. A green
-check is not a substitute for that curation.
-
-Images are deliberately not checked, because whether one renders is visible the
-moment you look. Open this file on GitHub and look at it before you ship.
+Checking whether RADIO's filter worked, two independent measurements said it was
+dead — the second comparing a ratio precisely because ratios ignore gain. Both
+measured noise: the voice is per-strike random by design, and the spread between
+single strikes is 5+ dB, larger than the effect. Rather than rewire working
+code, I changed the experiment. Median of eight strikes, comparing spectral
+tilt: NORM −22.70 dB, RADIO −28.18, NORM −22.73. Both traps are now in
+`CLAUDE.md`
+([`72ffe25`](https://github.com/comp4020-agentic-coding-studio/comp4020-crit4-jnheinrich451-eng/commit/72ffe25)).
